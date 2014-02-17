@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstring>
 
+#include <set>
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -19,6 +20,7 @@ typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 
+// 类型定义
 typedef unsigned long ULONG;
 typedef unsigned short USHORT;
 typedef short OFFSET;
@@ -33,6 +35,14 @@ typedef WORD DFPROPTYPE;
 typedef ULONG SID;
 //typedef CLSID GUID;
 
+// SAT中的表项的取值
+// >= 0指向下一个sector
+const SECT DIFSECT = 0xFFFFFFFC; // 用来存MSAT用到的sector
+const SECT FATSECT = 0xFFFFFFFD; // 用来存SAT用到的sector
+const SECT ENDOFCHAIN = 0xFFFFFFFE; // 表示这个sector是这个链的最后一个sector了
+const SECT FREESECT = 0xFFFFFFFF; // 表示这个sector没有存东西
+
+// DirectoryEntry的类型
 typedef enum tagSTGTY {
   STGTY_INVALID	 = 0,
   STGTY_STORAGE	 = 1,
@@ -42,11 +52,13 @@ typedef enum tagSTGTY {
   STGTY_ROOT		 = 5,
 } STGTY;
 
+// DirEntry的颜色（红黑树中用到）
 typedef enum tagDECOLOR {
   DE_RED = 0,
   DE_BLACK = 1,
 } DECOLOR;
 
+// DirEntry的修改时间
 typedef struct tagFILETIME {
   DWORD dwLowDateTime;
   DWORD dwHighDateTime;
@@ -83,6 +95,7 @@ private:
   std::vector<uint8_t> _ssat; //short-sector allocation table
 
 private:
+  unsigned long _nsec; // number of sectors in _buf
   unsigned long _sz; // size of a sector
   unsigned long _ssz; // size of a short-sector
 
@@ -111,35 +124,42 @@ private:
 public: // debug
   void __print_dir() {
     for (int i = 0; i < (int)_dir.size(); ++i) {
-      printf("%s\n", _dir[i]._ab);
+      char temp[32];
+      for (int j = 0; j < 32; ++j) {
+        temp[j] = _dir[i]._ab[j * 2];
+      }
+      printf("%s\n", temp);
     }
   }
 
 private:
-  void _init();
-  void _initSAT();
-  void _initDIR();
-  void _initSSAT();
-  std::vector<uint8_t> __read_stream(int sec_id,
+  bool _init();
+  bool _init_sat();
+  bool _init_dir();
+  bool _init_ssat();
+  bool __read_stream(
+      int sec_id,
       int sec_sz,
       const std::vector<uint8_t> &sat,
       const std::vector<uint8_t> &buf,
-      int _offset = 512);
+      int _offset,
+      __out std::vector<uint8_t> &stream) const;
 
 public:
-  Storage(FILE *file);
-  Storage(const std::vector<uint8_t> &arg_buf);
-  Storage(uint8_t *arg_buf, uint32_t length);
+  bool init(FILE *file);
+  bool init(const std::vector<uint8_t> &arg_buf);
+  bool init(uint8_t *arg_buf, uint32_t length);
 
-  bool read_stream(const char *name, __out std::vector<uint8_t> &stream);
-  bool read_stream(unsigned int DirID, __out std::vector<uint8_t> &stream);
+  bool read_stream(const char *name, __out std::vector<uint8_t> &stream) const;
+  bool read_stream(unsigned int DirID, __out std::vector<uint8_t> &stream) const;
 
-  bool get_dir_entry(unsigned int DirID, __out DirEntry &entry);
-  std::vector<uint32_t> entry_children(unsigned int DirID);
+  bool get_dir_entry(unsigned int DirID, __out DirEntry &entry) const;
+  bool entry_children(unsigned int DirID, __out std::vector<uint32_t> &children) const;
 };
 
 namespace tsfn {
   uint16_t get16(const std::vector<uint8_t> &buf, unsigned int offset);
   uint32_t get32(const std::vector<uint8_t> &buf, unsigned int offset);
+  extern uint16_t _uByteOrder;
 }
 #endif

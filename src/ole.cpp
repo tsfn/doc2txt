@@ -1,181 +1,393 @@
 #include "ole.h"
 
-using namespace tsfn;
+
 
 /*
  * 从字节数组中提取整数的小工具
  */
+
+uint16_t tsfn::_uByteOrder;
+
 uint16_t tsfn::get16(const std::vector<uint8_t> &buf, unsigned int offset) {
-  assert(offset + 2U <= buf.size());
   uint16_t a[2] = {};
-  for (int i = 0; i < 2; ++i) a[i] = buf[offset++];
-  return (a[1] << 8) | a[0];
+  for (int i = 0; i < 2; ++i) {
+    a[i] = offset < buf.size() ? buf[offset] : 0;
+    ++offset;
+  }
+  return _uByteOrder == 0xFEFF ?
+    ((a[1] << 8) | a[0]) :
+    ((a[0] << 8) | a[1]);
 }
 
 uint32_t tsfn::get32(const std::vector<uint8_t> &buf, unsigned int offset) {
-  assert(offset + 4U <= buf.size());
   uint32_t a[4] = {};
-  for (int i = 0; i < 4; ++i) a[i] = buf[offset++];
-  return (a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0];
+  for (int i = 0; i < 4; ++i) {
+    a[i] = offset < buf.size() ? buf[offset] : 0;
+    ++offset;
+  }
+  return _uByteOrder == 0xFEFF ?
+    (a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0] :
+    (a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3];
 }
 
+
+using tsfn::_uByteOrder;
+using tsfn::get16;
+using tsfn::get32;
 
 /*
  * class Storage;
  * OLE文件（doc/ppt/xls）结构解析器的实现
- * 构造函数：
- *    Storage(FILE *file);
- *    Storage(const std::vector<uint8_t> &buf);
- *    Storage(uint8_t *buf, uint32_t length);
+ * 初始化函数：
+ *    bool init(FILE *file);
+ *    bool init(const std::vector<uint8_t> &buf);
+ *    bool init(uint8_t *buf, uint32_t length);
  */
 
-Storage::Storage(FILE *file) {
-  assert(file != NULL);
+bool Storage::init(FILE *file) {
+  if (file == NULL) {
+    return false;
+  }
   fseek(file, 0, SEEK_SET);
   int ch;
   while ((ch = fgetc(file)) != EOF) {
     _buf.push_back((uint8_t)ch);
   }
-  _init();
+  return _init();
 }
 
-Storage::Storage(const std::vector<uint8_t> &buf) {
+bool Storage::init(const std::vector<uint8_t> &buf) {
   _buf = buf;
-  _init();
+  return _init();
 }
 
-Storage::Storage(uint8_t *buf, uint32_t l) {
-  assert(buf != NULL);
+bool Storage::init(uint8_t *buf, uint32_t l) {
+  if (buf == NULL) {
+    return buf;
+  }
   _buf.resize(l);
   for (int i = 0; i < (int)l; ++i) {
     _buf[i] = buf[i];
   }
-  _init();
+  return _init();
 }
 
 
-void Storage::_init() { // 根据buf中的内容初始化
+/*
+ * 根据buf中的内容初始化
+ */
+bool Storage::_init() {
   // 从实际数据发现OLE文件的大小不一定是整512字节的，从_buf中取字节的时候要注意
-  assert(_buf.size() >= 512U);
-  static const uint8_t _abSig[8] = {0xD0, 0xCF, 0x11, 0xE0,
-                                    0xA1, 0xB1, 0x1A, 0xE1};
-  for (int i = 0; i < 8; ++i) {
-    assert(_buf[i] == _abSig[i]);
+  if (_buf.size() < 512U) {
+    return false;
   }
+
+  // 1:提取字段值，检测值的合法性
+
+  // 小端存储（0xFEFF）还是大端存储（0xFFFE）
+  _uByteOrder = ((uint16_t)_buf[0x1C] << 8) + _buf[0x1D];
+  if (_uByteOrder != 0xFEFF && _uByteOrder != 0xFFFE) {
+    return false;
+  }
+
+  // 一个普通sector占用多少字节
   uint16_t _uSectorShift = get16(_buf, 0x01E);
+  if (_uSectorShift == 0 || _uSectorShift >= 32) {
+    return false;
+  }
+  _sz = 1UL << _uSectorShift;
+
+  // 一个short-sector占用多少字节
   uint16_t _uMiniSectorShift = get16(_buf, 0x020);
-  uint32_t _csectFat = get32(_buf, 0x02C);
+  if (_uMiniSectorShift == 0 || _uMiniSectorShift >= 32) {
+    return false;
+  }
+  _ssz = 1UL << _uMiniSectorShift;
+
+  // short-sector的最大长度
   _ulMiniSectorCutoff = get32(_buf, 0x038);
-  _sz = 1UL << _uSectorShift; // 一个普通sector占用多少字节
-  _ssz = 1UL << _uMiniSectorShift; // 一个short-sector占用多少字节
-  _initSAT();
-  _initDIR();
-  _initSSAT();
+  if (_ulMiniSectorCutoff == 0) {
+    return false;
+  }
+
+  // 2:将_buf的大小扩展成(512 + 若干个_sz)字节的
+  _nsec = ((_buf.size() - 512) + _sz - 1) / _sz;
+  _buf.resize(512 + _nsec * _sz);
+
+
+  // 3:检查头部的标识符
+  static const uint8_t _abSig1[8] =
+    {0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
+  static const uint8_t _abSig2[8] = 
+    {0x0E, 0x11, 0xFC, 0x0D, 0xD0, 0xCF, 0x11, 0xE0};
+  bool sigFlag1 = true, sigFlag2 = true;
+  for (int i = 0; i < 8; ++i) {
+    sigFlag1 &= (_buf[i] == _abSig1[i]);
+    sigFlag2 &= (_buf[i] == _abSig2[i]);
+  }
+  if (!sigFlag1 && !sigFlag2) {
+    return false;
+  }
+
+  // 初始化：SAT（sector allocation table）、
+  // 目录项directory entry、
+  // SSAT（short-sector allocation table）
+  return _init_sat() && _init_dir() && _init_ssat();
 }
 
-void Storage::_initSAT() { // 初始化sector分配表(sector allocation table)
-  //先搞出MSAT，MSAT分成header中的部分和链表部分，
-  //只有文件比较大的时候才会用到链表部分
-  uint32_t _sectDifStart = get32(_buf, 0x044); // first SecID of MSAT
-  uint32_t _csectDif = get32(_buf, 0x048); // number of sectors used by MSAT
-  const int osz = 109 * 4;
+
+/*
+ * 初始化sector分配表(sector allocation table，SAT)
+ */
+bool Storage::_init_sat() {
+  // 一：得到MSAT
   std::vector<uint8_t> _msat;
-  for (int j = 0; j < osz; ++j) { // get the MSAT's SecID that is in header
-    _msat.push_back(_buf[0x4C + j]);
-  }
-  uint32_t cnt_sect = 0;
-  for (int i = _sectDifStart; i >= 0; i = get32(_buf, 512 + _sz*i + _sz-4)) {
-    cnt_sect += 1;
-    for (int j = 0; j < _sz - 4; ++j) {
-      _msat.push_back(_buf[512 + i * _sz + j]);
+  {
+    // MSAT分成header中的部分和链表部分
+    // 只有文件比较大的时候才会用到链表部分
+
+    //header中MSAT部分的大小
+    const int osz = 109 * 4;
+
+    // 得到MSAT的header中的部分
+    // 保证_buf的大小合法
+    for (int j = 0; j < osz; ++j) {
+      _msat.push_back(_buf[0x4C + j]);
     }
-  }
 
-#ifdef NEED_WARNING
-  if (cnt_sect != _csectDif) {
-    fprintf(stderr, "Warning: header._csectDif is %u != "
-        "real number of sectors used by MSAT(%u)\n",
-        _csectDif, cnt_sect);
-    fflush(stderr);
-  }
-#endif
-
-  //通过MSAT将SAT取出来
-  FSINDEX _csectFat = get32(_buf, 0x2C);
-  _sat.clear();
-  for (int i = 0; i < (int)_csectFat; ++i) {
-    int id = get32(_msat, i * 4);
-    for (int j = 0; j < _sz && 512 + id * _sz + j < (int)_buf.size(); ++j) {
-      _sat.push_back(_buf[512 + id * _sz + j]);
+    // MSAT链表部分用到的第一个SecID
+    uint32_t _sectDifStart = get32(_buf, 0x044);
+    if (_sectDifStart != ENDOFCHAIN && _sectDifStart >= _nsec) {
+      return false;
     }
-  }
 
-#ifdef NEED_WARNING
-  for (int i = 0; i < (int)_msat.size() / 4; ++i) {
-    int id = get32(_msat, i * 4); // MSAT说SecID=id的sector是用来存放SAT的
-    if (i < (int)_csectFat) {
-      // SAT中SecID=id的sector的表记了的值，应该是-3
-      int val = get32(_sat, id * 4);
-      if (val != -3) {
-        fprintf(stderr, "Warning: SecId=%d"
-            "used for SAT, but SAT[%d]=%d\n", id, id, val);
-        fflush(stderr);
+    // 得到sector中的MSAT的链表部分
+    // 同时检测从_sectDifStart开始的MSAT链的合法性
+    uint32_t cnt_sect = 0;
+    std::set<int> vis;
+    for (int i = _sectDifStart;; i = get32(_buf, 512 + _sz * i + _sz - 4)) {
+      if (i >= 0) {
+        if (i >= _nsec || vis.count(i)) {
+          return false;
+        }
+        vis.insert(i);
+      } else if (i == ENDOFCHAIN) {
+        break;
+      } else {
+        return false;
       }
-    } else {
-      if (id != -1) {
-        fprintf(stderr, "Warning: _csectFat = %u,"
-            "_msat[%d] = %d\n", _csectFat, i, id);
-        fflush(stderr);
+      cnt_sect += 1;
+      for (int j = 0; j < _sz - 4; ++j) {
+        _msat.push_back(_buf[512 + _sz * i + j]);
       }
     }
-  }
+
+    // MSAT用到的sector的数量如果和header._csectDif不符
+    // 只输出一条提示信息
+    uint32_t _csectDif = get32(_buf, 0x048); // MSAT用到了几个sector
+    if (cnt_sect != _csectDif) {
+#ifdef NEED_WARNING
+      fprintf(stderr,
+          "Warning: header._csectDif is %u != "
+          "real number of sectors used by MSAT(%u)\n",
+          _csectDif, cnt_sect);
+      fflush(stderr);
+#else
+      return false;
 #endif
+    }
+  }
+
+  // 二：得到SAT
+  {
+    // SAT占用了多少sector
+    uint32_t _csectFat = get32(_buf, 0x2C);
+    if (_csectFat > _msat.size() / 4) {
+      return false;
+    }
+
+    // 通过MSAT将SAT取出来
+    _sat.clear();
+    for (int i = 0; i < (int)_csectFat; ++i) {
+      uint32_t id = get32(_msat, i * 4);
+      if (id >= _nsec) {
+        return false;
+      }
+      for (int j = 0; j < _sz; ++j) {
+        _sat.push_back(_buf[512 + id * _sz + j]);
+      }
+    }
+  }
+
+  // 三：对MSAT中的内容进行检查
+  {
+    // SAT占用了多少sector
+    uint32_t _csectFat = get32(_buf, 0x2C);
+
+    for (int i = 0; i < (int)_msat.size() / 4; ++i) {
+      // MSAT说SecID=id的sector是用来存放SAT的
+      int id = get32(_msat, i * 4);
+
+      if (i < (int)_csectFat) {
+        // SAT中SecID=id的sector的表记了的值，应该是FATSECT
+        int val = get32(_sat, id * 4);
+#ifdef NEED_WARNING
+        if (val != FATSECT) {
+          fprintf(stderr,
+              "Warning: SecId=%d, used for SAT, but SAT[%d]=%d\n",
+              id, id, val);
+          fflush(stderr);
+        }
+#else
+        return false;
+#endif
+      } else {
+        // MSAT在这里不指向任何值，用FREESECT填充
+#ifdef NEED_WARNING
+        if (id != FREESECT) {
+          fprintf(stderr, "Warning: _csectFat = %u, _msat[%d] = %d\n",
+              _csectFat, i, id);
+          fflush(stderr);
+        }
+#else
+        return false;
+#endif
+      }
+    }
+  }
+
+  // 四：对SAT中的MSAT占用的数据进行合法性检测
+  {
+    // MSAT链表部分用到的第一个SecID
+    uint32_t _sectDifStart = get32(_buf, 0x044);
+
+    // 遍历MSAT用到的sector，然后对比SAT中相应表项的值是否合法
+    for (int i = _sectDifStart; i != ENDOFCHAIN;
+        i = get32(_buf, 512 + _sz * i + _sz - 4)) {
+      // SAT的第i项应该是-4，因为放了MSAT用到的sector
+      int val = get32(_sat, i * 4);
+#ifdef NEED_WARNING
+      if (val != DIFSECT) {
+        fprintf(stderr,
+            "Warning: SecId=%d, "
+            "used for MSAT, but SAT[%d]=%d\n",
+            i, i, val);
+        fflush(stderr);
+      }
+#else
+      return false;
+#endif
+    }
+  }
+
+  // 五：检查SAT中的链是否都合法
+  {
+    // 将_sat转化成数组
+    std::vector<uint32_t> sat;
+    for (unsigned long i = 0; i < _sat.size(); i += 4) {
+      uint32_t id = get32(_sat, i);
+      sat.push_back(id);
+    }
+
+    // 记录哪些项没有入度
+    std::vector<uint8_t> ind(sat.size(), 0);
+    for (int i = 0; i < sat.size(); ++i) {
+      int id = sat[i];
+      if (id >= 0) {
+        ind[id] = 1;
+      }
+    }
+
+    // 遍历每个SAT上的链，出现环的话返回false
+    for (int i = 0; i < sat.size(); ++i) {
+      int id = sat[i];
+      if (id >= 0 && ind[id] == 0) {
+        // 从这个SecID开始应该可以连成一条链，不能有环
+        std::set<uint32_t> vis;
+        for (uint32_t j = i; j != ENDOFCHAIN; j = sat[j]) {
+          if (vis.count(j)) {
+            // 出现环
+            return false;
+          }
+          vis.insert(j);
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
-void Storage::_initDIR() {
+/*
+ * 初始化所有目录项
+ */
+
+bool Storage::_init_dir() {
   uint32_t _sectDirStart = get32(_buf, 0x030);
-  std::vector<uint8_t> str = __read_stream(_sectDirStart, _sz, _sat, _buf);
+  std::vector<uint8_t> str;
+  if (!__read_stream(_sectDirStart, _sz, _sat, _buf, 512, str)) {
+    return false;
+  }
   _dir.clear();
   for (int i = 0; i < (int)str.size(); i += 128) {
     std::vector<uint8_t> ts;
     for (int j = 0; j < 128; ++j) {
       ts.push_back(i + j >= (int)str.size() ? 0 : str[i + j]);
     }
-    DirEntry d = DirEntry(ts);
-    if (d._mse != 0) _dir.push_back(d);
+    _dir.push_back(DirEntry(ts));
   }
+  return true;
 }
 
-void Storage::_initSSAT() {
+bool Storage::_init_ssat() {
   // 初始化短流要用到的 SSAT(short-sector allocation table)
   //    和SSCS(short-stream container stream)
   //  过程和读取普通的流一样
   uint32_t _sectMiniFatStart = get32(_buf, 0x03C);
   uint32_t _csectMiniFat = get32(_buf, 0x040);
-  _ssat = __read_stream(_sectMiniFatStart, _sz, _sat, _buf);
-  _miniBuf = __read_stream(_dir[0]._sectStart, _sz, _sat, _buf);
+  if (!__read_stream(_sectMiniFatStart, _sz, _sat, _buf, 512, _ssat)) {
+    return false;
+  }
+  if (!__read_stream(_dir[0]._sectStart, _sz, _sat, _buf, 512, _miniBuf)) {
+    return false;
+  }
 
-#ifdef NEED_WARNING
   if ((_ssat.size() + _sz - 1) / _sz != _csectMiniFat) {
+#ifdef NEED_WARNING
     //SSAT实际没有用到_csectMiniFat这么多的sector
     fprintf(stderr, "Warning: _csectMiniFat = %u,"
         "_ssat.size() = %u\n", _ssat.size());
-  }
+#else
+    return false;
 #endif
+  }
+  return true;
 }
 
-std::vector<uint8_t> Storage::__read_stream(int i,
+bool Storage::__read_stream(
+    int id,
     int sz,
     const std::vector<uint8_t> &sat,
     const std::vector<uint8_t> &buf,
-    int _offset) {
-  std::vector<uint8_t> str;
-  for (; i >= 0; i = get32(sat, 4 * i)) {
-    for (int j = 0; j < sz && _offset + i * sz + j < (int)buf.size(); ++j) {
-      str.push_back(buf[_offset + i * sz + j]);
+    int _offset,
+    __out std::vector<uint8_t> &stream) const {
+  stream.clear();
+  while (id != ENDOFCHAIN) {
+    // SecID的范围要合法
+    if (id < 0 || id >= sat.size() / 4) {
+      return false;
     }
+    for (int j = 0; j < sz; ++j) {
+      // SecID指向的范围要在buf的范围中
+      if (_offset + id * sz + j < (int)buf.size()) {
+        stream.push_back(buf[_offset + id * sz + j]);
+      } else {
+        return false;
+      }
+    }
+    id = get32(sat, 4 * id);
   }
-  return str;
+  return true;
 }
 
 /*
@@ -186,7 +398,9 @@ std::vector<uint8_t> Storage::__read_stream(int i,
  */
 bool Storage::read_stream(
     const char *name,
-    __out std::vector<uint8_t> &stream) {
+    __out std::vector<uint8_t> &stream) const {
+  // 根据名字提取流的过程其实就是根据名字在_dir中寻找DirID
+  // 然后调用bool Storage::read_stream(DirID, stream)
   for (int i = 0; i < (int)_dir.size(); ++i) {
     bool is_same_name = true;
     for (int j = 0; name[j] != '\0'; ++j) {
@@ -198,12 +412,7 @@ bool Storage::read_stream(
     if (!is_same_name) {
       continue;
     }
-
-    int SecID = _dir[i]._sectStart;
-    stream = _dir[i]._ulSize > _ulMiniSectorCutoff ?
-      __read_stream(SecID, _sz, _sat, _buf) :
-      __read_stream(SecID, _ssz, _ssat, _miniBuf, 0);
-    return true;
+    return read_stream(i, stream);
   }
   return false;
 }
@@ -215,16 +424,14 @@ bool Storage::read_stream(
  */
 bool Storage::read_stream(
     unsigned int DirID,
-    __out std::vector<uint8_t> &stream) {
+    __out std::vector<uint8_t> &stream) const {
   if (DirID >= _dir.size()) {
     return false;
   }
-
   int SecID = _dir[DirID]._sectStart;
-  stream = _dir[DirID]._ulSize > _ulMiniSectorCutoff ?
-    __read_stream(SecID, _sz, _sat, _buf) :
-    __read_stream(SecID, _ssz, _ssat, _miniBuf, 0);
-  return true;
+  return _dir[DirID]._ulSize > _ulMiniSectorCutoff ?
+    __read_stream(SecID, _sz, _sat, _buf, 512, stream) :
+    __read_stream(SecID, _ssz, _ssat, _miniBuf, 0, stream);
 }
 
 
@@ -232,7 +439,7 @@ bool Storage::read_stream(
  * 根据DirID取得某个目录项（DirEntry）
    bool Storage::get_dir_entry(int DirID, __out DirEntry &entry);
  */
-bool Storage::get_dir_entry(unsigned int DirID, __out DirEntry &entry) {
+bool Storage::get_dir_entry(unsigned int DirID, __out DirEntry &entry) const {
   if (DirID >= _dir.size()) {
     return false;
   }
@@ -243,23 +450,32 @@ bool Storage::get_dir_entry(unsigned int DirID, __out DirEntry &entry) {
 /*
  * Storage的第DirID个目录项的所有子目录项的DirID
  */
-std::vector<uint32_t> Storage::entry_children(unsigned int DirID) {
+bool Storage::entry_children(
+    unsigned int DirID,
+    __out std::vector<uint32_t> &children) const {
+  if (DirID >= _dir.size()) {
+    return false;
+  }
+
   // 在文件系统中，一个目录下的所有项目是用链表连在一起的
   // 为了加快查询速度，MS把一个目录下的所有项目存在了一个平衡二叉树里（红黑树）
-  std::vector<uint32_t> children;
-  if (DirID < _dir.size() && _dir[DirID]._sidChild >= 0) {
-    //对这一层的所有项目组成的二叉树进行一次宽搜，得到所有子项目
-    children.push_back(_dir[DirID]._sidChild);
-    for (int i = 0; i < (int)children.size(); ++i) {
-      if (_dir[i]._sidLeftSib >= 0) {
-        children.push_back(_dir[i]._sidLeftSib);
-      }
-      if (_dir[i]._sidRightSib >= 0) {
-        children.push_back(_dir[i]._sidRightSib);
-      }
+  //对这一层的所有项目组成的二叉树进行一次宽搜，得到所有子项目
+  children.clear();
+  children.push_back(_dir[DirID]._sidChild);
+  for (int i = 0; i < (int)children.size(); ++i) {
+    int ls = _dir[i]._sidLeftSib, rs = _dir[i]._sidRightSib;
+    if (0 <= ls && ls < _dir.size()) {
+      children.push_back(ls);
+    } else if (ls != -1) {
+      return false;
+    }
+    if (0 <= rs && rs < _dir.size()) {
+      children.push_back(rs);
+    } else if (rs != -1) {
+      return false;
     }
   }
-  return children;
+  return true;
 }
 
 
@@ -294,5 +510,4 @@ DirEntry::DirEntry(const std::vector<uint8_t> &s) {
   }
 #endif
 }
-
 
