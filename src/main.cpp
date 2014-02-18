@@ -46,8 +46,8 @@ bool retrieve_text(const Storage &st, __out std::vector<uint8_t> &text) {
   //    Variable fibRgFcLcb; // (fibRgFcLcbBlob，FIB中第一个变长的结构) {
   //      744bytes fibRgFcLcb97; {
   //        ...
-  //        fcClx; // WDS[0x01A2] Clx在Table Stream中的偏移位置
-  //        lcbClx; // WDS[0x01A6] Clx的长度
+  //        4bytes fcClx; // WDS[0x01A2] Clx在Table Stream中的偏移位置
+  //        4bytes lcbClx; // WDS[0x01A6] Clx的长度
   //                // fcClx和lcbClx在WordDocument Stream中的相对位置是固定的
   //        ...
   //      }

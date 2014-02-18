@@ -64,6 +64,11 @@ typedef struct tagFILETIME {
   DWORD dwHighDateTime;
 } FILETIME, TIME_T;
 
+
+/*
+ * DirEntry类
+ */
+
 class DirEntry {
 public:
 	uint8_t _ab[64];
@@ -85,6 +90,10 @@ public:
   DirEntry(const std::vector<uint8_t> &s);
 };
 
+
+/*
+ * Storage类
+ */
 
 class Storage {
 private:
