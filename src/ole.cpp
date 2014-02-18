@@ -481,20 +481,36 @@ bool Storage::entry_children(
 
   // 在文件系统中，一个目录下的所有项目是用链表连在一起的
   // 为了加快查询速度，MS把一个目录下的所有项目存在了一个平衡二叉树里（红黑树）
-  //对这一层的所有项目组成的二叉树进行一次宽搜，得到所有子项目
+  // 对这一层的所有项目组成的二叉树进行一次宽搜，得到所有子项目
+  std::set<uint32_t> visit;
   children.clear();
-  children.push_back(_dir[DirID]._sidChild);
+  if (_dir[DirID]._sidChild < _dir.size()) {
+    children.push_back(_dir[DirID]._sidChild);
+  }
+  visit.insert(_dir[DirID]._sidChild);
   for (int i = 0; i < (int)children.size(); ++i) {
-    int ls = _dir[i]._sidLeftSib, rs = _dir[i]._sidRightSib;
-    if (0 <= ls && ls < _dir.size()) {
-      children.push_back(ls);
-    } else if (ls != -1) {
-      return false;
-    }
-    if (0 <= rs && rs < _dir.size()) {
-      children.push_back(rs);
-    } else if (rs != -1) {
-      return false;
+    int child[2], cur = children[i];
+    child[0] = _dir[cur]._sidLeftSib;
+    child[1] = _dir[cur]._sidRightSib;
+    for (int j = 0; j < 2; ++j) {
+      uint32_t id = child[j];
+      if (id < _dir.size()) {
+        // 每个点的后继各不相同
+        if (visit.count(id)) {
+          return false;
+        }
+        visit.insert(id);
+        children.push_back(id);
+      } else if ((int)id == -1) { // DirID标志结尾，跳过不处理
+      } else {
+#ifdef NEED_WARNING
+        fprintf(stderr, "Warning: DirID[%u]'s %uth children's id = %08XU\n",
+            DirID, j, id);
+        fflush(stderr);
+#else
+        return false;
+#endif
+      }
     }
   }
   return true;

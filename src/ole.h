@@ -137,8 +137,11 @@ public: // debug
       for (int j = 0; j < 32; ++j) {
         temp[j] = _dir[i]._ab[j * 2];
       }
-      printf("%s\n", temp);
+      printf("[%d] %s: ls=[%d], rs=[%d], ch=[%d]\n",
+          i, temp,
+          _dir[i]._sidLeftSib, _dir[i]._sidRightSib, _dir[i]._sidChild);
     }
+    printf("\n");
   }
 
 private:

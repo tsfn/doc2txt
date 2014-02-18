@@ -194,6 +194,37 @@ bool retrieve_text(const Storage &st, __out std::vector<uint8_t> &text) {
   return true;
 }
 
+/*
+ * 以缩减的形式列出doc文件中的结构
+ */
+void list_directory_tree(const Storage &s, int DirID, int white_space) {
+  for (int i = 0; i < white_space; ++i) {
+    printf(" ");
+  }
+
+  DirEntry dir_entry;
+  if (!s.get_dir_entry(DirID, dir_entry)) {
+    printf("get DirID(%d)'s dir_entry failed!\n", DirID);
+    return;
+  }
+
+  char name[32];
+  for (int i = 0; i < 32; ++i) {
+    name[i] = dir_entry._ab[2 * i];
+  }
+  printf("(DirID = %d) %s ", DirID, name);
+
+  std::vector<uint32_t> children;
+  if (s.entry_children(DirID, children)) {
+    printf("(%d children)\n", children.size());
+    for (unsigned i = 0; i < children.size(); ++i) {
+      list_directory_tree(s, children[i], white_space + 2);
+    }
+  } else {
+    printf("get _dir[%d]'s children failed!\n", DirID);
+  }
+}
+
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {
@@ -212,7 +243,10 @@ int main(int argc, char *argv[]) {
   fclose(file);
 
   // 输入文件中有哪些流
-  // s.__print_dir();
+  s.__print_dir();
+
+  // 输入文件中中各个流的之间的层次结构
+  list_directory_tree(s, 0, 0);
 
   // 取得文本，以UTF-16保存
   std::vector<uint8_t> str;
