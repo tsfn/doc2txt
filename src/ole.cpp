@@ -115,9 +115,9 @@ bool Storage::_init() {
 
   // 3:检查头部的标识符
   static const uint8_t _abSig1[8] =
-    {0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
+  {0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
   static const uint8_t _abSig2[8] = 
-    {0x0E, 0x11, 0xFC, 0x0D, 0xD0, 0xCF, 0x11, 0xE0};
+  {0x0E, 0x11, 0xFC, 0x0D, 0xD0, 0xCF, 0x11, 0xE0};
   bool sigFlag1 = true, sigFlag2 = true;
   for (int i = 0; i < 8; ++i) {
     sigFlag1 &= (_buf[i] == _abSig1[i]);
@@ -229,27 +229,27 @@ bool Storage::_init_sat() {
       if (i < (int)_csectFat) {
         // SAT中SecID=id的sector的表记了的值，应该是FATSECT
         int val = get32(_sat, id * 4);
-#ifdef NEED_WARNING
         if (val != FATSECT) {
+#ifdef NEED_WARNING
           fprintf(stderr,
               "Warning: SecId=%d, used for SAT, but SAT[%d]=%d\n",
               id, id, val);
           fflush(stderr);
-        }
 #else
-        return false;
+          return false;
 #endif
+        }
       } else {
         // MSAT在这里不指向任何值，用FREESECT填充
-#ifdef NEED_WARNING
         if (id != FREESECT) {
+#ifdef NEED_WARNING
           fprintf(stderr, "Warning: _csectFat = %u, _msat[%d] = %d\n",
               _csectFat, i, id);
           fflush(stderr);
-        }
 #else
-        return false;
+          return false;
 #endif
+        }
       }
     }
   }
@@ -264,26 +264,33 @@ bool Storage::_init_sat() {
         i = get32(_buf, 512 + _sz * i + _sz - 4)) {
       // SAT的第i项应该是-4，因为放了MSAT用到的sector
       int val = get32(_sat, i * 4);
-#ifdef NEED_WARNING
       if (val != DIFSECT) {
+#ifdef NEED_WARNING
         fprintf(stderr,
             "Warning: SecId=%d, "
             "used for MSAT, but SAT[%d]=%d\n",
             i, i, val);
         fflush(stderr);
-      }
 #else
-      return false;
+        return false;
 #endif
+      }
     }
   }
 
   // 五：检查SAT中的链是否都合法
   {
-    // 将_sat转化成数组
+    // 将_sat转化成数组，检查每项的合法性
     std::vector<uint32_t> sat;
+    uint32_t node_counter = 0; // 可能是链上的节点的数量
     for (unsigned long i = 0; i < _sat.size(); i += 4) {
-      uint32_t id = get32(_sat, i);
+      int id = get32(_sat, i);
+      if (id < -4 || id >= (int)_sat.size() / 4) {
+        return false;
+      }
+      if (id == (int)ENDOFCHAIN || id >= 0) {
+        node_counter += 1;
+      }
       sat.push_back(id);
     }
 
@@ -297,19 +304,32 @@ bool Storage::_init_sat() {
     }
 
     // 遍历每个SAT上的链，出现环的话返回false
+    std::set<uint32_t> vis; // 记录遍历过的位置
     for (int i = 0; i < sat.size(); ++i) {
-      int id = sat[i];
-      if (id >= 0 && ind[id] == 0) {
+      if (((int)sat[i] >= 0 || sat[i] == (int)ENDOFCHAIN) && ind[i] == 0) {
         // 从这个SecID开始应该可以连成一条链，不能有环
-        std::set<uint32_t> vis;
-        for (uint32_t j = i; j != ENDOFCHAIN; j = sat[j]) {
-          if (vis.count(j)) {
-            // 出现环
+        for (uint32_t id = i; id != ENDOFCHAIN; id = sat[id]) {
+          if (vis.count(id)) { // 出现环
             return false;
           }
-          vis.insert(j);
+          vis.insert(id);
         }
       }
+    }
+
+    // 如果遍历过的位置的数量不等于所有可能是
+    if (vis.size() != node_counter) {
+#ifdef NEED_WARNING
+      for (int i = 0; i < sat.size(); ++i) {
+        printf("sat[%d] = %d\n", i, sat[i]);
+      }
+      fprintf(stderr, "Warning: SAT may be invalid:"
+          "vis.size() = %u, node_counter = %d\n",
+          vis.size(), node_counter);
+      fflush(stderr);
+#else
+      return false;
+#endif
     }
   }
 
@@ -395,8 +415,8 @@ bool Storage::__read_stream(
 /*
  * 根据流的名字读取流
  * bool Storage::read_stream(
-         const char *name,
-         __out std::vector<uint8_t> &stream);
+ const char *name,
+ __out std::vector<uint8_t> &stream);
  */
 bool Storage::read_stream(
     const char *name,
@@ -439,7 +459,7 @@ bool Storage::read_stream(
 
 /*
  * 根据DirID取得某个目录项（DirEntry）
-   bool Storage::get_dir_entry(int DirID, __out DirEntry &entry);
+ bool Storage::get_dir_entry(int DirID, __out DirEntry &entry);
  */
 bool Storage::get_dir_entry(unsigned int DirID, __out DirEntry &entry) const {
   if (DirID >= _dir.size()) {

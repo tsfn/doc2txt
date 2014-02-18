@@ -71,20 +71,20 @@ typedef struct tagFILETIME {
 
 class DirEntry {
 public:
-	uint8_t _ab[64];
-    //[0x00]这个directory_entry所表示的流的名字，按UTF-16保存
-	uint16_t _cb; //[0x40] _ab保存的名字的长度，按有多少字算，不是按字节算
-	uint8_t _mse; //[0x42] 对象的类型，值取STGTY中的一个
-	uint8_t _bflags; //[0x43] 值是DECOLOR中的一个
-	uint32_t _sidLeftSib; //[0x44] 当前项的左兄弟的SID
-	uint32_t _sidRightSib; //[0x48] 当前项的右兄弟的SID
-	uint32_t _sidChild; //[0x4C] 当前层中的根节点
-	uint8_t _clsId[16]; //[0x50] 当前storage的CLSID（如果_mse=STGTY_STORAGE）
-	uint32_t _dwUserFlags; //[0x60] 当前storage的用户标记（如果_mse=STGTY_STORAGE）
-	TIME_T _time[2]; //[0x64] Create/Modify时间戳
-	uint32_t _sectStart; //*[0x74] 流的起始sector的SecID
-	uint32_t _ulSize; //*[0x78] 流的大小，单位是字节
-	uint16_t _dptPropType; //[0x7C] 一定都是0
+  uint8_t _ab[64];
+  //[0x00]这个directory_entry所表示的流的名字，按UTF-16保存
+  uint16_t _cb; //[0x40] _ab保存的名字的长度，按有多少字算，不是按字节算
+  uint8_t _mse; //[0x42] 对象的类型，值取STGTY中的一个
+  uint8_t _bflags; //[0x43] 值是DECOLOR中的一个
+  uint32_t _sidLeftSib; //[0x44] 当前项的左兄弟的SID
+  uint32_t _sidRightSib; //[0x48] 当前项的右兄弟的SID
+  uint32_t _sidChild; //[0x4C] 当前层中的根节点
+  uint8_t _clsId[16]; //[0x50] 当前storage的CLSID（如果_mse=STGTY_STORAGE）
+  uint32_t _dwUserFlags; //[0x60] 当前storage的用户标记（如果_mse=STGTY_STORAGE）
+  TIME_T _time[2]; //[0x64] Create/Modify时间戳
+  uint32_t _sectStart; //*[0x74] 流的起始sector的SecID
+  uint32_t _ulSize; //*[0x78] 流的大小，单位是字节
+  uint16_t _dptPropType; //[0x7C] 一定都是0
 
 public:
   bool init(const std::vector<uint8_t> &s);
@@ -124,11 +124,11 @@ private:
   //SECT _sectDirStart; // -> MSAT chain's first SecID
   //DFSIGNATURE _signature; // -> MSAT chain's length
   ULONG _ulMiniSectorCutoff; // short-sector的最大大小
-	//ULONG _sectMiniFatStart; // *[0x3C] SSAT占用的第一个sector的SecID
-	//ULONG _csectMiniFat; // *[0x40] SSAT占用了多少个sector
-	//ULONG _sectDifStart; // *[0x44] MSAT占用的第一个sector的SecID
-	//ULONG _csectDif; // *[0x48] MSAT占用了多少个sector
-	//ULONG _sectFat[109]; // *[0x4C] MSAT的第一个部分，包含109个SecID
+  //ULONG _sectMiniFatStart; // *[0x3C] SSAT占用的第一个sector的SecID
+  //ULONG _csectMiniFat; // *[0x40] SSAT占用了多少个sector
+  //ULONG _sectDifStart; // *[0x44] MSAT占用的第一个sector的SecID
+  //ULONG _csectDif; // *[0x48] MSAT占用了多少个sector
+  //ULONG _sectFat[109]; // *[0x4C] MSAT的第一个部分，包含109个SecID
 
 public: // debug
   void __print_dir() {

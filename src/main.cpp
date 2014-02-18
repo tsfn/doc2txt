@@ -191,6 +191,7 @@ bool retrieve_text(const Storage &st, __out std::vector<uint8_t> &text) {
       }
     }
   }
+  return true;
 }
 
 
