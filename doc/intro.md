@@ -2,7 +2,7 @@
 
 [维基百科](http://en.wikipedia.org/wiki/DOC_%28computing%29)
 [MSDN文档](http://msdn.microsoft.com/en-us/library/dd904907)
-[我的代码](http://pan.baidu.com/s/1i3oOSZj)
+[我的代码](https://github.com/tsfn/doc2txt)
 
 doc文件是一种二进制复合文件（Binary Compound File），其中存储了若干个流（stream），一个流就是一串连续的字节，一个流可能是表示文件内部结构的数据、可能是用户数据、可能是一个二进制文件、或文本文件等。
 
@@ -24,7 +24,7 @@ doc文件是一种二进制复合文件（Binary Compound File），其中存储
       uchar _clid[16]; // [0x08]16个字节，id号
       ushort _uMinorVersion; // [0x18]次版本号
       ushort _uDllVersion; // [0x1A]主版本号
-      ushort _uByteOrder; // [0x1C]0xFFFE表示大端存储，0xFEFF表示小端存储，一般是0xFEFF
+      ushort _uByteOrder; // [0x1C]只能是0xFFFE，表示小端存储（Little-Endian）
       ushort _uSectorShift; // *[0x1E] 表示每个sector区的大小是(1<<_uSectorShift)字节
       ushort _uShortSectorShift; // *[0x20] 表示每个short_sector区的大小是(1<<_uShortSectorShift)字节
       ushort _usReseverd; // [0x022]

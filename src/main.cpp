@@ -8,7 +8,7 @@ bool WriteStream(FILE *file, const std::vector<uint8_t> &str) {
   if (file == NULL) {
     return false;
   }
-  // BOM: 0xFFFE, Little-Endian
+  // BOM: Little-Endian
   fputc(0xFF, file);
   fputc(0xFE, file);
   for (std::vector<uint8_t>::const_iterator iter = str.begin(); iter != str.end(); ++iter) {
@@ -211,7 +211,7 @@ int main(int argc, char *argv[]) {
   fclose(file);
 
   // 输入文件中有哪些流
-  s.__print_dir();
+  // s.__print_dir();
 
   // 取得文本，以UTF-16保存
   std::vector<uint8_t> str;

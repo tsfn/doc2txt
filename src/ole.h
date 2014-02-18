@@ -87,7 +87,7 @@ public:
 	uint16_t _dptPropType; //[0x7C] 一定都是0
 
 public:
-  DirEntry(const std::vector<uint8_t> &s);
+  bool init(const std::vector<uint8_t> &s);
 };
 
 

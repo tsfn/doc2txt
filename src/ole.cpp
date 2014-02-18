@@ -14,9 +14,7 @@ uint16_t tsfn::get16(const std::vector<uint8_t> &buf, unsigned int offset) {
     a[i] = offset < buf.size() ? buf[offset] : 0;
     ++offset;
   }
-  return _uByteOrder == 0xFEFF ?
-    ((a[1] << 8) | a[0]) :
-    ((a[0] << 8) | a[1]);
+  return (a[1] << 8) | a[0];
 }
 
 uint32_t tsfn::get32(const std::vector<uint8_t> &buf, unsigned int offset) {
@@ -25,9 +23,7 @@ uint32_t tsfn::get32(const std::vector<uint8_t> &buf, unsigned int offset) {
     a[i] = offset < buf.size() ? buf[offset] : 0;
     ++offset;
   }
-  return _uByteOrder == 0xFEFF ?
-    (a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0] :
-    (a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3];
+  return (a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0];
 }
 
 
@@ -84,9 +80,11 @@ bool Storage::_init() {
 
   // 1:提取字段值，检测值的合法性
 
-  // 小端存储（0xFEFF）还是大端存储（0xFFFE）
-  _uByteOrder = ((uint16_t)_buf[0x1C] << 8) + _buf[0x1D];
-  if (_uByteOrder != 0xFEFF && _uByteOrder != 0xFFFE) {
+  // UTF-16中BOM=0xFEFF
+  // 微软说在这里OxFFFE代表小端存储
+  // 但事实上大家都只用小端方式
+  _uByteOrder = ((uint16_t)_buf[0x1D] << 8) + _buf[0x1C];
+  if (_uByteOrder != 0xFFFE) {
     return false;
   }
 
@@ -329,12 +327,16 @@ bool Storage::_init_dir() {
     return false;
   }
   _dir.clear();
+  DirEntry dir_entry;
   for (int i = 0; i < (int)str.size(); i += 128) {
     std::vector<uint8_t> ts;
     for (int j = 0; j < 128; ++j) {
       ts.push_back(i + j >= (int)str.size() ? 0 : str[i + j]);
     }
-    _dir.push_back(DirEntry(ts));
+    if (!dir_entry.init(ts)) {
+      return false;
+    }
+    _dir.push_back(dir_entry);
   }
   return true;
 }
@@ -484,8 +486,10 @@ bool Storage::entry_children(
  * 目录项的构造函数
  */
 
-DirEntry::DirEntry(const std::vector<uint8_t> &s) {
-  assert(s.size() == 128U);
+bool DirEntry::init(const std::vector<uint8_t> &s) {
+  if (s.size() != 128U) {
+    return false;
+  }
   for (int i = 0; i < 64; ++i) {
     _ab[i] = s[i];
   }
@@ -509,5 +513,6 @@ DirEntry::DirEntry(const std::vector<uint8_t> &s) {
     fprintf(stderr, "Warning: DirEntry._dptPropType == %u\n", _dptPropType);
   }
 #endif
+  return true;
 }
 
