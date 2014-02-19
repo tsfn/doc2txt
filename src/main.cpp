@@ -212,7 +212,7 @@ void list_directory_tree(const Storage &s, int DirID, int white_space) {
   for (int i = 0; i < 32; ++i) {
     name[i] = dir_entry._ab[2 * i];
   }
-  printf("(DirID = %d) %s ", DirID, name);
+  printf("(DirID = %d) %s, size = %u ", DirID, name, dir_entry._ulSize);
 
   std::vector<uint32_t> children;
   if (s.entry_children(DirID, children)) {

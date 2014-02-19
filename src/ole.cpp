@@ -6,8 +6,6 @@
  * 从字节数组中提取整数的小工具
  */
 
-uint16_t tsfn::_uByteOrder;
-
 uint16_t tsfn::get16(const std::vector<uint8_t> &buf, unsigned int offset) {
   uint16_t a[2] = {};
   for (int i = 0; i < 2; ++i) {
@@ -27,9 +25,9 @@ uint32_t tsfn::get32(const std::vector<uint8_t> &buf, unsigned int offset) {
 }
 
 
-using tsfn::_uByteOrder;
 using tsfn::get16;
 using tsfn::get32;
+
 
 /*
  * class Storage;
@@ -83,7 +81,7 @@ bool Storage::_init() {
   // UTF-16中BOM=0xFEFF
   // 微软说在这里OxFFFE代表小端存储
   // 但事实上大家都只用小端方式
-  _uByteOrder = ((uint16_t)_buf[0x1D] << 8) + _buf[0x1C];
+  uint16_t _uByteOrder = ((uint16_t)_buf[0x1D] << 8) + _buf[0x1C];
   if (_uByteOrder != 0xFFFE) {
     return false;
   }
@@ -317,7 +315,7 @@ bool Storage::_init_sat() {
       }
     }
 
-    // 如果遍历过的位置的数量不等于所有可能是
+    // 如果遍历过的位置的数量不等于所有可能是链节点的节点数量
     if (vis.size() != node_counter) {
 #ifdef NEED_WARNING
       for (int i = 0; i < sat.size(); ++i) {

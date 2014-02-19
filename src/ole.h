@@ -172,6 +172,5 @@ public:
 namespace tsfn {
   uint16_t get16(const std::vector<uint8_t> &buf, unsigned int offset);
   uint32_t get32(const std::vector<uint8_t> &buf, unsigned int offset);
-  extern uint16_t _uByteOrder;
 }
 #endif

@@ -164,7 +164,7 @@ WordDocument流的开头32字节是`FibBase`，结构如下：
   * D – fHasPic (1 bit) 如果是0，文件中应该没有图片
   * E – cQuickSaves (4 bits) 如果nFib小于0x00D9，cQuickSaves是文件连续增量保存的次数；如果nFib大于等于0x00D9，cQuickSaves一定是0xF
   * F – fEncrypted (1 bit) 标志文件是否被加密或被扰乱（obfuscated）
-  * G – fWhichTblStm (1 bit) 标志FIB引用的是1Table(fWhichTblStm=1)还是0Table(fWhichTblStm=0)。但是实际中通过wds[0x0B]&0x02才能确定是0Table还是1Table。
+  * G – fWhichTblStm (1 bit) 标志FIB引用的是1Table(fWhichTblStm=1)还是0Table(fWhichTblStm=0)。
   * H – fReadOnlyRecommended (1 bit) 标志文件是否被作者设置为建议只读
   * I – fWriteReservation (1 bit) 标记文件是否有写入密码
   * J – fExtChar (1 bit) 一定是1
@@ -178,8 +178,8 @@ WordDocument流的开头32字节是`FibBase`，结构如下：
   * O – fEmptySpecial (1 bit) 应该是0
   * P – fLoadOverridePage (1 bit) 标志是否用应用程序默认的页面大小、方向和留空
   * Q – reserved1 (1 bit) 未定义
-  * R – reverved2 (2 bit) 未定义
-  * S – fSpare0 (3bits) 未定义
+  * R – reverved2 (1 bit) 未定义
+  * S – fSpare0 (3 bits) 未定义
 
 
 ### 根据WordDocument流得到clx字节数组
