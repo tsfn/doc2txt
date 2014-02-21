@@ -1,6 +1,10 @@
 // WordDocument流从偏移量为0处是结构FIB(File Information Block)
 // WordDocument的其他部分都是不是固定偏移的。
 
+typedef unsigned char uchar;
+typedef unsigned short ushort;
+typedef unsigned int uint;
+
 struct FibBase { // {{{
   ushort wIdent;		// 用来标记的字段，一定是0xA5EC
   ushort nFib;		  // 指定文档版本号，被FibRgCswNew.nFibNew取代
@@ -493,10 +497,6 @@ struct FibRgCswNewData2007 { // {{{
   ushort idThemeCS; // 未定义
 }; // }}}
 
-
-typedef unsigned char uchar;
-typedef unsigned short ushort;
-typedef unsigned int uint;
 
 
 struct Fib {

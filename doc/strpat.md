@@ -7,12 +7,6 @@
 
 ### 结果
 
-<style type="text/css">
-.tg  {border-collapse:collapse;border-spacing:0;}
-.tg td{font-family:Arial, sans-serif;font-size:14px;padding:10px 5px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;}
-.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:10px 5px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;}
-</style>
-
 #### 和关键字数量的关系
 
 <table class="tg">
@@ -149,80 +143,24 @@ AC自动机的用时非常稳定，基本等于（文本长度+关键字长度�
 
 ### automaton.h
 
-
-    #include "automaton.h"
-    #include "brute_force.h"
+    #ifndef AUTOMATON_H
+    #define AUTOMATON_H
     
-    #include <cstdlib>
     #include <ctime>
-    #include <cmath>
+    #include <cstdlib>
     
+    #include <set>
+    #include <map>
+    #include <list>
+    #include <queue>
     #include <vector>
-    #include <cstdio>
+    #include <algorithm>
     
-    int MAX_LENGTH = 10000000;
-    int PATTERN_LENGTH = 100;
-    int MAX_VALUE = 128;
-    
-    void test1(
+    std::set<int> text_matching(
         const std::vector<int> &text,
-        const std::vector< std::vector<int> > &patterns) {
-      printf("find pattern-strings in text using automaton:\n");
-      clock_t start_time = clock();
-      std::set<int> which = text_matching(text, patterns);
-      printf("<%lf> second past\n", double(clock() - start_time) / CLOCKS_PER_SEC);
-      printf("[%u] patterns have been found\n", which.size());
-    }
+        const std::vector< std::vector<int> > &patterns);
     
-    void test2(
-        const std::vector<int> &text,
-        const std::vector< std::vector<int> > &patterns) {
-      printf("find pattern-strings in text using brute force:\n");
-      clock_t start_time = clock();
-      std::set<int> which = brute_force_text_matching(text, patterns);
-      printf("<<%lf>> second past\n", double(clock() - start_time) / CLOCKS_PER_SEC);
-      printf("[[%u]] patterns have been found\n", which.size());
-    }
-    
-    int main() {
-      srand(time(0));
-    
-      for (int i = 0; i < 6; ++i) {
-        if (i < 100) MAX_VALUE = 1000;
-        else if (i == 0) MAX_VALUE = 2;
-        else if (i == 1) MAX_VALUE = 26;
-        else if (i == 2) MAX_VALUE = 1000;
-        else MAX_VALUE = 1000000;
-    
-        PATTERN_LENGTH = pow(10, i);
-        // PATTERN_LENGTH = 10;
-    
-        std::vector<int> text(MAX_LENGTH);
-        for (size_t i = 0; i < text.size(); ++i) {
-          text[i] = rand() % MAX_VALUE;
-        }
-    
-        double average_length = 0;
-        std::vector< std::vector<int> > patterns(100);
-        for (size_t i = 0; i < patterns.size(); ++i) {
-          patterns[i].resize(rand() % PATTERN_LENGTH + 1);
-          average_length += patterns[i].size();
-          for (size_t j = 0; j < patterns[i].size(); ++j) {
-            patterns[i][j] = rand() % MAX_VALUE;
-          }
-        }
-    
-        printf("--- Test #%d: ---\n", i);
-        printf("MAX_VALUE = %d, text length = %d, "
-            " %d patterns, average length = %.1lf\n",
-            MAX_VALUE, text.size(), patterns.size(),
-            average_length / patterns.size());
-        test1(text, patterns);
-        test2(text, patterns);
-      }
-    
-      return 0;
-    }
+    #endif
 
 
 ### automaton.cpp

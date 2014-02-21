@@ -4,7 +4,7 @@
 
 ### Usage Example
 
-`$ ./doc2txt a.doc a.txt`
+`$ ./bin/doc2txt a.doc a.txt`
 
 will extract text from a.doc to a.txt.
 
