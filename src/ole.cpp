@@ -161,8 +161,8 @@ bool Storage::_init_sat() {
     // 同时检测从_sectDifStart开始的MSAT链的合法性
     uint32_t cnt_sect = 0;
     std::set<int> vis;
-    for (int i = _sectDifStart;; i = get32(_buf, 512 + _sz * i + _sz - 4)) {
-      if (i >= 0) {
+    for (uint32_t i = _sectDifStart;; i = get32(_buf, 512 + _sz * i + _sz - 4)) {
+      if ((int)i >= 0) {
         if (i >= _nsec || vis.count(i)) {
           return false;
         }
@@ -173,7 +173,7 @@ bool Storage::_init_sat() {
         return false;
       }
       cnt_sect += 1;
-      for (int j = 0; j < _sz - 4; ++j) {
+      for (uint32_t j = 0; j < _sz - 4; ++j) {
         _msat.push_back(_buf[512 + _sz * i + j]);
       }
     }
@@ -204,12 +204,12 @@ bool Storage::_init_sat() {
 
     // 通过MSAT将SAT取出来
     _sat.clear();
-    for (int i = 0; i < (int)_csectFat; ++i) {
+    for (uint32_t i = 0; i < _csectFat; ++i) {
       uint32_t id = get32(_msat, i * 4);
       if (id >= _nsec) {
         return false;
       }
-      for (int j = 0; j < _sz; ++j) {
+      for (uint32_t j = 0; j < _sz; ++j) {
         _sat.push_back(_buf[512 + id * _sz + j]);
       }
     }
@@ -220,13 +220,13 @@ bool Storage::_init_sat() {
     // SAT占用了多少sector
     uint32_t _csectFat = get32(_buf, 0x2C);
 
-    for (int i = 0; i < (int)_msat.size() / 4; ++i) {
+    for (uint32_t i = 0; i < _msat.size() / 4; ++i) {
       // MSAT说SecID=id的sector是用来存放SAT的
-      int id = get32(_msat, i * 4);
+      uint32_t id = get32(_msat, i * 4);
 
-      if (i < (int)_csectFat) {
+      if (i < _csectFat) {
         // SAT中SecID=id的sector的表记了的值，应该是FATSECT
-        int val = get32(_sat, id * 4);
+        uint32_t val = get32(_sat, id * 4);
         if (val != FATSECT) {
 #ifdef NEED_WARNING
           fprintf(stderr,
@@ -258,10 +258,10 @@ bool Storage::_init_sat() {
     uint32_t _sectDifStart = get32(_buf, 0x044);
 
     // 遍历MSAT用到的sector，然后对比SAT中相应表项的值是否合法
-    for (int i = _sectDifStart; i != ENDOFCHAIN;
+    for (uint32_t i = _sectDifStart; i != ENDOFCHAIN;
         i = get32(_buf, 512 + _sz * i + _sz - 4)) {
       // SAT的第i项应该是-4，因为放了MSAT用到的sector
-      int val = get32(_sat, i * 4);
+      uint32_t val = get32(_sat, i * 4);
       if (val != DIFSECT) {
 #ifdef NEED_WARNING
         fprintf(stderr,
@@ -294,7 +294,7 @@ bool Storage::_init_sat() {
 
     // 记录哪些项没有入度
     std::vector<uint8_t> ind(sat.size(), 0);
-    for (int i = 0; i < sat.size(); ++i) {
+    for (int i = 0; i < (int)sat.size(); ++i) {
       int id = sat[i];
       if (id >= 0) {
         ind[id] = 1;
@@ -303,8 +303,8 @@ bool Storage::_init_sat() {
 
     // 遍历每个SAT上的链，出现环的话返回false
     std::set<uint32_t> vis; // 记录遍历过的位置
-    for (int i = 0; i < sat.size(); ++i) {
-      if (((int)sat[i] >= 0 || sat[i] == (int)ENDOFCHAIN) && ind[i] == 0) {
+    for (int i = 0; i < (int)sat.size(); ++i) {
+      if (((int)sat[i] >= 0 || sat[i] == ENDOFCHAIN) && ind[i] == 0) {
         // 从这个SecID开始应该可以连成一条链，不能有环
         for (uint32_t id = i; id != ENDOFCHAIN; id = sat[id]) {
           if (vis.count(id)) { // 出现环
@@ -318,7 +318,7 @@ bool Storage::_init_sat() {
     // 如果遍历过的位置的数量不等于所有可能是链节点的节点数量
     if (vis.size() != node_counter) {
 #ifdef NEED_WARNING
-      for (int i = 0; i < sat.size(); ++i) {
+      for (uint32_t i = 0; i < sat.size(); ++i) {
         printf("sat[%d] = %d\n", i, sat[i]);
       }
       fprintf(stderr, "Warning: SAT may be invalid:"
@@ -376,7 +376,9 @@ bool Storage::_init_ssat() {
 #ifdef NEED_WARNING
     //SSAT实际没有用到_csectMiniFat这么多的sector
     fprintf(stderr, "Warning: _csectMiniFat = %u,"
-        "_ssat.size() = %u\n", _ssat.size());
+        "_ssat.size() = %u\n",
+        _csectMiniFat,
+        _ssat.size());
 #else
     return false;
 #endif
@@ -392,9 +394,9 @@ bool Storage::__read_stream(
     int _offset,
     __out std::vector<uint8_t> &stream) const {
   stream.clear();
-  while (id != ENDOFCHAIN) {
+  while (id != (int)ENDOFCHAIN) {
     // SecID的范围要合法
-    if (id < 0 || id >= sat.size() / 4) {
+    if (id < 0 || id >= (int)sat.size() / 4) {
       return false;
     }
     for (int j = 0; j < sz; ++j) {

@@ -88,6 +88,22 @@ public:
 
 public:
   bool init(const std::vector<uint8_t> &s);
+  std::string __name() const {
+    std::string name;
+    for (uint16_t i = 0; i < _cb; i += 2) {
+      uint8_t ch = _ab[i];
+      if (ch == 0) {
+        break;
+      } else if (33 <= ch && ch < 127) {
+        name += char(ch);
+      } else {
+        char temp[8];
+        sprintf(temp, "[%04X]", ch);
+        name += temp;
+      }
+    }
+    return name;
+  }
 };
 
 
@@ -133,12 +149,8 @@ private:
 public: // debug
   void __print_dir() {
     for (int i = 0; i < (int)_dir.size(); ++i) {
-      char temp[32];
-      for (int j = 0; j < 32; ++j) {
-        temp[j] = _dir[i]._ab[j * 2];
-      }
       printf("[%d] %s: ls=[%d], rs=[%d], ch=[%d]\n",
-          i, temp,
+          i, _dir[i].__name().c_str(),
           _dir[i]._sidLeftSib, _dir[i]._sidRightSib, _dir[i]._sidChild);
     }
     printf("\n");

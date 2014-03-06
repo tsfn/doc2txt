@@ -28,7 +28,7 @@ struct FibBase { // {{{
   ushort fWriteReservation: 1; // 标记文件是否有写入密码
   ushort fExtChar: 1;     // 一定是1
   ushort fLoadOverride: 1; // 标志是否要用应用程序使用的语言和格式
-  uhosrt fFarEast: 1;     // 标志应用程序使用的语言是否是东亚语言
+  ushort fFarEast: 1;     // 标志应用程序使用的语言是否是东亚语言
   ushort fObfuscated: 1; // 如果fEncrypted=1，
                          //  fObfuscated标志了文件是否用XOR扰乱过
 
@@ -41,7 +41,7 @@ struct FibBase { // {{{
   uchar fMac: 1; // 一定是0
   uchar fEmptySpecial: 1; // 应该是0
   uchar fLoadOverridePage: 1; // 标志是否用应用程序默认的页面大小、方向和留空
-  uchar reserved1: 1
+  uchar reserved1: 1;
   uchar reverved2: 1;
   uchar fSpare0: 3; // 未定义
 
@@ -89,9 +89,6 @@ struct FibRgLw97 { // {{{
   uint reserved12;
   uint reserved13;
   uint reserved14;
-}; // }}}
-struct FibRgFcLcb { // {{{
-  struct FibRgFcLcb97 FibRgFcLcb97; // 根据FibBase.nFib而定
 }; // }}}
 struct FibRgFcLcb97 { // {{{
   uint fcStshfOrig;
@@ -473,28 +470,31 @@ struct FibRgFcLcb2007 { // {{{
   uint fcColorSchemeMapping;
   uint lcbColorSchemeMapping;
 }; // }}}
+struct FibRgCswNewData2000 { // {{{
+  ushort cQuickSavesNew;  // 该文档在最后一次完全保存后进行了多少次增量保存
+                          //  取值范围必须在0到0x000F之间
+}; // }}}
+struct FibRgCswNewData2007 { // {{{
+  struct FibRgCswNewData2000 rgCswNewData2000;
+  ushort lidThemeOther; // 未定义
+  ushort lidThemeFE; // 未定义
+  ushort idThemeCS; // 未定义
+}; // }}}
 struct FibRgCswNew { // {{{
   ushort nFibNew; // 文件格式的版本号，它的值一定是以下值中的一个
                   //  0x00D9
                   //  0x0101
                   //  0x010C
                   //  0x0112
-  struct rgCswNewData2000 rgCswNewData; // 根据nFibNew的值，取以下值中的一个
+  struct FibRgCswNewData2000 rgCswNewData; // 根据nFibNew的值，取以下值中的一个
                   // nFibNew    类型
                   // 0x00D9     fibRgCswNewData2000 (2 bytes)
                   // 0x0101     fibRgCswNewData2000 (2 bytes)
                   // 0x010C     fibRgCswNewData2000 (2 bytes)
                   // 0x0112     fibRgCswNewData2007 (8 bytes)
 }; // }}}
-struct FibRgCswNewData2000 { // {{{
-  ushort cQuickSavesNew;  // 该文档在最后一次完全保存后进行了多少次增量保存
-                          //  取值范围必须在0到0x000F之间
-}; // }}}
-struct FibRgCswNewData2007 { // {{{
-  struct FibRgCswNewData200 rgCswNewData2000;
-  ushort lidThemeOther; // 未定义
-  ushort lidThemeFE; // 未定义
-  ushort idThemeCS; // 未定义
+struct FibRgFcLcb { // {{{
+  struct FibRgFcLcb97 FibRgFcLcb97; // 根据FibBase.nFib而定
 }; // }}}
 
 
@@ -526,6 +526,6 @@ struct Fib {
                     //  0x0101    0x0002
                     //  0x010C    0x0002
                     //  0x0112    0x0005
-  struct fibRgCswNew fibRgCswNew; // 变长
+  struct FibRgCswNew fibRgCswNew; // 变长
 };
 
