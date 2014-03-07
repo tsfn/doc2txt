@@ -121,7 +121,7 @@ ChpxFkp的大小固定是`512`字节，它的最后一个字节表示一个无�
         uchar *Chpx = ChpxFkp + 2 * bOffset;
         uint cb = *(uchar *)ChpxFkp;
         uchar *grpprl = Chpx + 1;
-        // 根据cb和grpprl得到格式信息
+        // 根据cb和grpprl处理grpprl结构
     }
 
 
@@ -153,7 +153,26 @@ ChpxFkp的大小固定是`512`字节，它的最后一个字节表示一个无�
 
 其中rgfc有`cpara+1`个元素，rgb有`cpara`个元素。
 
-相邻的两个rgfc指定了一段文本，对应的rgbx指定了一个PapxInFkp，其中的grpprlInPapx中的GrpPrlAndIstd中的grpprl描述了这段文本的段落格式。对grpprl的处理和在ChpxFkp中的一样。
+相邻的两个rgfc指定了一段文本，对应的rgbx指定了一个PapxInFkp，其中的grpprlInPapx中的GrpPrlAndIstd中的grpprl描述了这段文本的段落格式。
+
+这里的grpprl和在ChpxFkp中的grpprl结构一样，处理方式也类似，但是它在grpprlInPapx结构中的grpprlInPapx中，因此需要特殊处理`cb`字段。
+
+    uchar cpara = *(uchar *)(PapxFkp + 511);
+    for (uchar i = 0; i < cpara; ++i) {
+        uint rgfc_start = *(uint *)(PapxFkp + 4 * i);
+        uint rgfc_end = *(uint *)(PapxFkp + 4 * i + 4);
+        uchar bOffset = *(uchar *)(PapxFkp + 4 * (cpara + 1) + 13 * i);
+        uchar cb = *(uchar *)(PapxFkp + bOffset * 2);
+        uint lcbGrpPrlAndIstd = 2 * cb - 1;
+        uchar *GrpPrlAndIstd = PapxFkp + bOffset * 2 + 1;
+        if (cb == 0) {
+            lcbGrpPrlAndIstd = *GrpPrlAndIstd * 2;
+            GrpPrlAndIstd += 1;
+        }
+        cb = lcbGrpPrlAndIstd - 2;
+        uchar *grpprl = GrpPrlAndIstd + 2;
+        // 根据cb和grpprl处理grpprl结构
+    }
 
 
 ### grpprl
@@ -189,6 +208,39 @@ grpprl是一个Prl的数组，每个Prl的结构如下：
 
         operand (variable); // 格式的参数
     }
+
+每个Prl包括sprm部分和operand部分，sprm表示某种格式，operand表示这种格式的参数。grpprl中依次存放多个Prl，由于Prl是变长的，提取过程需要一定的计算。
+
+    static const int operand_size[8] = { 1, 1, 2, 4, 2, 2, -1, 3, };
+    uint i = 0;
+    while (i < cb) {
+        ushort sprm = *(ushort *)(grpprl + i);
+        uint ispmd = sprm & 0x01FF;
+        uint f = (sprm / 512) & 0x0001;
+        uint sgc = (sprm / 1024) & 0x0007;
+        uint spra = sprm / 8192;
+        uint operand;
+        i += 2;
+        if (spra == 6) {
+            i += 1 + *(uchar *)(grpprl + i);
+        } else {
+            if (operand_size[spra] == 1) {
+                operand = *(uchar *)(grpprl + i);
+            } else if (operand_size[spra] == 2) {
+                operand = *(ushort *)(grpprl + i);
+            } else if (operand_size[spra] == 3) {
+                operand = *(uint *)(grpprl + i) & 0x00FFFFFF;
+            } else if (operand_size[spra] == 4) {
+                operand = *(uint *)(grpprl + i);
+            } else {
+                operand = -1;
+            }
+            i += operand_size[spra];
+        }
+        // 得到一个sprm和相应的operand
+    }
+
+#### 用到的sprm的取值和参数
 
 * sprm = 0x4A43 表示文字的大小
     * operand 是一个ushort类整数，以半角为单位，值一定要在2到3276之间，默认值是20。
