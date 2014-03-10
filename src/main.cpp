@@ -1,5 +1,4 @@
-#include "ole.h"
-#include "FIB.h"
+#include "ole.hpp"
 
 using tsfn::get16;
 using tsfn::get32;
@@ -10,9 +9,11 @@ bool WriteStream(FILE *file, const std::vector<uint8_t> &str) {
   if (file == NULL) {
     return false;
   }
+
   // BOM: Little-Endian
   fputc(0xFF, file);
   fputc(0xFE, file);
+
   /*
   for (uint i = 0; i < str.size(); i += 2) {
     printf("0x%02X%02X ", str[i + 1], str[i]);
@@ -31,11 +32,14 @@ bool WriteStream(FILE *file, const std::vector<uint8_t> &str) {
 std::string to_string(ushort ch) {
   std::string str;
   if (ch == 0x0020) {
-    return " "; // "空格";
+    // return " ";
+    return "空格";
   } else if (ch == 0x000D) {
-    return "\n"; // "回车";
+    // return "\n";
+    return "回车";
   } else if (ch == 0x0007) {
-    return "\t"; // "制表符Tab"
+    // return "\t";
+    return "制表符Tab";
   } else
 
   if (33 <= ch && ch < 128) {
@@ -260,8 +264,9 @@ void list_directory_tree(const Storage &s, int DirID, int white_space) {
     return;
   }
 
-  printf("(DirID = %d) %s, size = %u ", DirID, dir_entry.__name().c_str(),
-      dir_entry._ulSize);
+  printf("(DirID = %d) %s, size = %u, sectStart = %u ",
+      DirID, dir_entry.__name().c_str(),
+      dir_entry._ulSize, dir_entry._sectStart);
 
   std::vector<uint32_t> children;
   if (s.entry_children(DirID, children)) {
@@ -274,18 +279,6 @@ void list_directory_tree(const Storage &s, int DirID, int white_space) {
   }
 }
 // }}}
-
-uchar *c_read_stream(const Storage *st, const char *name) {
-  std::vector<uint8_t> wds;
-  if (!st->read_stream(name, wds)) {
-    return NULL;
-  }
-  uchar *s = (uchar *)malloc(wds.size());
-  for (size_t i = 0; i < wds.size(); ++i) {
-    s[i] = wds[i];
-  }
-  return s;
-}
 
 std::set<uint> sprms;
 
@@ -876,23 +869,28 @@ int main(int argc, char *argv[]) {
   // 取得文本，以UTF-16保存
   std::vector<uint8_t> str;
   if (!retrieve_text(s, str)) {
-    fprintf(stderr, "init fail!\n");
-    return -1;
+    fprintf(stderr, "can't retrieve text!\n");
+  } else {
+    // 输出文本
+    FILE *tmp_file = fopen(argv[2], "wb");
+    for (uint i = 0; i < str.size(); ++i) {
+      fputc(str[i], tmp_file);
+    }
+    if (!WriteStream(tmp_file, str)) {
+      return -1;
+    }
+    fclose(tmp_file);
   }
 
-  // 输出文本
-  FILE *tmp_file = fopen(argv[2], "wb");
-  /*
-  if (!WriteStream(tmp_file, str)) {
-    return -1;
+  // 取得图片
+  if (!retrieve_image(s)) {
+    fprintf(stderr, "can't retrieve images!\n");
   }
-  fclose(tmp_file);
-  */
 
   // Formatting： 文本的位置
   // character_formatting(s);
   // paragraph_formatting(s);
-  parse_format(s, tmp_file);
+  // parse_format(s, tmp_file);
 
   /*
   printf("sprms:\n");

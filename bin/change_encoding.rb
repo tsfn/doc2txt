@@ -1,1 +1,1 @@
-puts ARGF.read().force_encoding(Encoding::UTF_16).encode("utf-8")
+puts ARGF.read().force_encoding(Encoding::UTF_16LE).encode(Encoding::UTF_8)

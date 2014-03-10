@@ -1,4 +1,4 @@
-#include "ole.h"
+#include "ole.hpp"
 
 
 
@@ -550,5 +550,17 @@ bool DirEntry::init(const std::vector<uint8_t> &s) {
   }
 #endif
   return true;
+}
+
+uchar *c_read_stream(const Storage *st, const char *name) {
+  std::vector<uint8_t> wds;
+  if (!st->read_stream(name, wds)) {
+    return NULL;
+  }
+  uchar *s = (uchar *)malloc(wds.size());
+  for (size_t i = 0; i < wds.size(); ++i) {
+    s[i] = wds[i];
+  }
+  return s;
 }
 

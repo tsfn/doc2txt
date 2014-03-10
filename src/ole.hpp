@@ -185,4 +185,14 @@ namespace tsfn {
   uint16_t get16(const std::vector<uint8_t> &buf, unsigned int offset);
   uint32_t get32(const std::vector<uint8_t> &buf, unsigned int offset);
 }
+
+
+typedef unsigned char uchar;
+typedef unsigned short ushort;
+typedef unsigned int uint;
+typedef unsigned long long ull;
+
+uchar *c_read_stream(const Storage *st, const char *name);
+bool retrieve_image(const Storage &st);
+
 #endif
