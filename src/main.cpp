@@ -29,6 +29,7 @@ bool WriteStream(FILE *file, const std::vector<uint8_t> &str) {
 }
 // }}}
 
+// to_string(ushort ch) {{{
 std::string to_string(ushort ch) {
   std::string str;
   if (ch == 0x0020) {
@@ -51,6 +52,7 @@ std::string to_string(ushort ch) {
   }
   return str;
 }
+// }}}
 
 // get piece_table {{{
 // pcd=piece_table
@@ -843,6 +845,184 @@ bool style_property(const Storage &st)  {
 }
 // }}}
 
+// retrieve property info {{{
+bool retrieve_property_info(const Storage &st, FILE *file) {
+  if (file == NULL) {
+    return false;
+  }
+
+  // 取得WordDocument Stream
+  uchar *wds = c_read_stream(&st, "WordDocument");
+  if (wds == NULL) {
+    return false;
+  }
+
+  // 取得Table Stream
+  uint16_t flag1 = *(ushort *)((char *)wds + 0xA);
+  bool is1Table = (flag1 & 0x0200) == 0x0200;
+  uchar *ts = c_read_stream(&st, is1Table ? "1Table" : "0Table");
+  if (ts == NULL) {
+    return false;
+  }
+
+  uint fcSttbfAssoc = *(uint *)(wds + 154 + 64 * 4);
+  uint lcbSttbfAssoc = *(uint *)(wds + 154 + 65 * 4);
+
+  /*
+   * STTB {
+   *   fExtend;
+   *   cData;
+   *   cbExtra;
+   *   [0 <= i < cData] {
+   *     cchData[i];
+   *     Data[i];
+   *     ExtraData[i];
+   *   }
+   * }
+   *
+   * STTB结构的一般情况：
+   * fExtend的头两个字节等于0xFFFF时：
+   *     Data字段中的字符是双字节的，cchData占两个字节
+   * 如果STTB的头两个字节不等于0xFFFF：
+   *     fExtend不存在，Data字段是单字节的，cchData占一个字节
+   *
+   * 在doc文件中需要满足：
+   * fExtend (2 bytes) = 0xFFFF
+   * cData (2 bytes) = 0x0012
+   * cbExtra (2 bytes) = 0
+   */
+
+  uchar *SttbfAssoc = ts + fcSttbfAssoc;
+  ushort fExtend = *(ushort *)SttbfAssoc;
+  ushort cData = *(ushort *)(SttbfAssoc + 2);
+  ushort cbExtra = *(ushort *)(SttbfAssoc + 4);
+
+  if (fExtend != 0xFFFF) {
+    fprintf(stderr, "WARNING: fExtend = 0x%04X, not 0xFFFF\n", fExtend);
+  }
+  if (cData != 0x0012) {
+    fprintf(stderr, "WARNING: cData = 0x%04X, not 0x0012\n", cData);
+  }
+  if (cbExtra != 0x0000) {
+    fprintf(stderr, "WARNING: cbExtra = 0x%04X, not 0x0000\n", cbExtra);
+  }
+
+  uchar *cur = SttbfAssoc + 6;
+  for (uint i = 0; i < cData; i += 1) {
+    ushort cchData = *(ushort *)(cur);
+    cur += 2;
+    if (i == 2 || i == 3 || i == 4 || i == 6 || i == 7) {
+      printf("cchData = %d\n", cchData);
+      for (uint j = 0; j < cchData; j += 1) {
+        fputc(cur[j], file);
+      }
+    }
+    cur += cchData;
+    if (i == 0x02) { // Title
+    } else if (i == 0x03) { // Subject
+    } else if (i == 0x04) { // Key words
+    } else if (i == 0x06) { // author
+    } else if (i == 0x07) { // user who last revised the document
+    }
+  }
+
+  free(wds);
+  free(ts);
+  return true;
+}
+// }}}
+
+// parse \005SummaryInformation Stream {{{
+bool parse_summary_information(const Storage &st, FILE *file) {
+  if (file == NULL) {
+    return false;
+  }
+
+  // 取得\005SummaryInformation Stream
+  char sis_name[64];
+  sis_name[0] = 5, sis_name[1] = 0;
+  sprintf(sis_name + 2, "SummaryInformation");
+  uchar *sis = c_read_stream(&st, sis_name);
+  if (sis == NULL) {
+    return false;
+  }
+
+  // 读取\005SummaryInformation Stream
+  /*
+  for (int i = 0; i < 324; ++i) {
+    printf("[%04X] = %02X\n", i, sis[i]);
+  }
+  */
+
+  /* \005SummaryInformation Stream是一个PropertySetStream
+   * PropertySetStream {
+   *   ByteOrder: (2 bytes);
+   *   Version: (2 bytes);
+   *   SystemIdentifier: (4 bytes);
+   *   CLSID: (16 bytes);
+   *   NumPropertySets: (4 bytes);
+   *   FMTIDO: (16 bytes);
+   *   Offset0: (4 bytes);
+   *   FMTID1: (0 bytes);
+   *   Offset1: (0 bytes);
+   *   PropertySet0: PropertySet (variable);
+   *   PropertySet1: PropertySet (variable);
+   *   Padding (variable);
+   * }
+   * PropertySet {
+   *   Size: (4 bytes); // 这个结构的中大小
+   *   NumProperties: (4 bytes); // 这个结构有多少个Property
+   *   PropertyIdentifierAndOffset[] {
+   *     PropertyIdentifier: (4 bytes); // Property编号
+   *     Offset: (4 bytes); // 从PropertySet的起始位置开始的偏移量
+   *   }
+   *   Property[] {
+   *     TypedPropertyValue {
+   *       Type: PropertyType (2 bytes);
+   *       Padding: (2 bytes);
+   *       Value: (variable) {
+   *         Type=0x0008: CodePageString;
+   *         Type=0x0040: FILETIME (Packet Version);
+   *       }
+   *     }
+   *   }
+   * }
+   */
+
+  FILE *out_file = fopen("./property.txt", "wb");
+
+  uchar *ps = sis + 48;
+  uint pre_size = 0;
+  uint num_property_set = *(uint *)(sis + 24);
+  for (uint set_id = 0; set_id < num_property_set; ++set_id) {
+    ps += pre_size;
+    pre_size = *(uint *)(ps);
+    uint num_properties = *(uint *)(ps + 4);
+    printf("num_properties = %u\n", num_properties);
+    for (uint i = 0; i < num_properties; ++i) {
+      uint pid = *(uint *)(ps + 8 + 8 * i);
+      uint offset = *(uint *)(ps + 8 + 8 * i + 4);
+      ushort type = *(ushort *)(ps + offset);
+      ushort padding = *(ushort *)(ps + offset + 2);
+      printf("pid = %u, offset = %u, type = 0x%04X, padding = %d\n",
+          pid, offset, type, padding);
+      uchar *value = ps + offset + 4;
+      if (type == 0x001E) {
+        uint size = *(uint *)(value);
+        printf("size = %u\n", size);
+        for (uint i = 0; i < size; ++i) {
+          fputc(value[4 + i], out_file);
+          // printf("value[0x%02X] = 0x%02X\n", 4 + i, value[4 + i]);
+          // fputc(value[4 + i], file);
+        }
+      }
+    }
+  }
+
+  free(sis);
+  return true;
+}
+// }}}
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {
@@ -850,29 +1030,50 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // 打开输入文件
-  FILE *file = fopen(argv[1], "rb");
   Storage s;
-  if (!s.init(file)) {
+  {
+    // 打开输入文件
+    FILE *file = fopen(argv[1], "rb");
+    if (!s.init(file)) {
+      fclose(file);
+      fprintf(stderr, "init fail!\n");
+      return -1;
+    }
     fclose(file);
-    fprintf(stderr, "init fail!\n");
-    return -1;
   }
-  fclose(file);
 
   // 输入文件中有哪些流
   // s.__print_dir();
 
   // 输入文件中中各个流的之间的层次结构
-  // list_directory_tree(s, 0, 0);
+  list_directory_tree(s, 0, 0);
 
-  // 取得文本，以UTF-16保存
+  /*
+  uchar *wds = c_read_stream(&s, "WordDocument");
+  for (uint i = 0; i < 190; ++i) {
+    printf("FibRgLcb97[%03d] = %08X\n", i, *(uint *)(wds + 154 + i * 4));
+  }
+  free(wds);
+  */
+
+  // 取得文本，以UTF-16LE保存
   std::vector<uint8_t> str;
   if (!retrieve_text(s, str)) {
     fprintf(stderr, "can't retrieve text!\n");
   } else {
-    // 输出文本
+    // 输出文件
     FILE *tmp_file = fopen(argv[2], "wb");
+
+    // 输出property information
+    if (!retrieve_property_info(s, tmp_file)) {
+      fprintf(stderr, "Can't retrieve propery information\n");
+    }
+
+    if (!parse_summary_information(s, tmp_file)) {
+      fprintf(stderr, "Can't parse summary information\n");
+    }
+
+    // 输出文本
     for (uint i = 0; i < str.size(); ++i) {
       fputc(str[i], tmp_file);
     }
@@ -883,7 +1084,7 @@ int main(int argc, char *argv[]) {
   }
 
   // 取得图片
-  if (!retrieve_image(s)) {
+  if (!retrieve_image(s, ".")) {
     fprintf(stderr, "can't retrieve images!\n");
   }
 

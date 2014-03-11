@@ -122,6 +122,15 @@ bool Storage::_init() {
     sigFlag2 &= (_buf[i] == _abSig2[i]);
   }
   if (!sigFlag1 && !sigFlag2) {
+#ifdef NEED_WARNING
+    static bool flag = true;
+    if (flag) {
+      flag = false;
+      fprintf(stderr, "WARNING: invalid signature\n");
+      fflush(stderr);
+    }
+#else
+#endif
     return false;
   }
 
@@ -163,14 +172,30 @@ bool Storage::_init_sat() {
     std::set<int> vis;
     for (uint32_t i = _sectDifStart;; i = get32(_buf, 512 + _sz * i + _sz - 4)) {
       if ((int)i >= 0) {
-        if (i >= _nsec || vis.count(i)) {
+        if (i >= _nsec) {
+          fprintf(stderr, "ERROR: (MSAT) invalid index\n");
+          fflush(stderr);
+          return false;
+        }
+        if (vis.count(i)) {
+          fprintf(stderr, "ERROR: (MSAT) circle reference\n");
+          fflush(stderr);
           return false;
         }
         vis.insert(i);
       } else if (i == ENDOFCHAIN) {
         break;
       } else {
+#ifdef NEED_WARNING
+        static bool flag = true;
+        if (flag) {
+          flag = false;
+          fprintf(stderr, "WARNING: MSAT not ended by ENDOFCAHIN\n");
+        }
+        break;
+#else
         return false;
+#endif
       }
       cnt_sect += 1;
       for (uint32_t j = 0; j < _sz - 4; ++j) {
@@ -183,10 +208,14 @@ bool Storage::_init_sat() {
     uint32_t _csectDif = get32(_buf, 0x048); // MSAT用到了几个sector
     if (cnt_sect != _csectDif) {
 #ifdef NEED_WARNING
-      fprintf(stderr,
-          "Warning: header._csectDif is %u != "
-          "real number of sectors used by MSAT(%u)\n",
-          _csectDif, cnt_sect);
+      static bool flag = true;
+      if (flag) {
+        flag = false;
+        fprintf(stderr,
+            "Warning: header._csectDif is %u, "
+            "but real number of sectors used by MSAT is %u\n",
+            _csectDif, cnt_sect);
+      }
       fflush(stderr);
 #else
       return false;
@@ -207,6 +236,8 @@ bool Storage::_init_sat() {
     for (uint32_t i = 0; i < _csectFat; ++i) {
       uint32_t id = get32(_msat, i * 4);
       if (id >= _nsec) {
+        fprintf(stderr, "ERROR: (MSAT->SAT) invalid index\n");
+        fflush(stderr);
         return false;
       }
       for (uint32_t j = 0; j < _sz; ++j) {
@@ -229,10 +260,14 @@ bool Storage::_init_sat() {
         uint32_t val = get32(_sat, id * 4);
         if (val != FATSECT) {
 #ifdef NEED_WARNING
-          fprintf(stderr,
-              "Warning: SecId=%d, used for SAT, but SAT[%d]=%d\n",
-              id, id, val);
-          fflush(stderr);
+          static bool flag = true;
+          if (flag) {
+            flag = false;
+            fprintf(stderr,
+                "WARNING: SecId=%d, used for SAT, but SAT[%d]=%d\n",
+                id, id, val);
+            fflush(stderr);
+          }
 #else
           return false;
 #endif
@@ -241,9 +276,13 @@ bool Storage::_init_sat() {
         // MSAT在这里不指向任何值，用FREESECT填充
         if (id != FREESECT) {
 #ifdef NEED_WARNING
-          fprintf(stderr, "Warning: _csectFat = %u, _msat[%d] = %d\n",
-              _csectFat, i, id);
-          fflush(stderr);
+          static bool flag = true;
+          if (flag) {
+            flag = false;
+            fprintf(stderr, "WARNING: _csectFat = %u, _msat[%d] = %d\n",
+                _csectFat, i, id);
+            fflush(stderr);
+          }
 #else
           return false;
 #endif
@@ -261,14 +300,27 @@ bool Storage::_init_sat() {
     for (uint32_t i = _sectDifStart; i != ENDOFCHAIN;
         i = get32(_buf, 512 + _sz * i + _sz - 4)) {
       // SAT的第i项应该是-4，因为放了MSAT用到的sector
+      if ((int)i < 0) {
+        static bool flag = true;
+        if (flag) {
+          flag = false;
+          fprintf(stderr, "WARNING: index(=%d) not end with ENDOFCHAIN\n", i);
+          fflush(stderr);
+        }
+        break;
+      }
       uint32_t val = get32(_sat, i * 4);
       if (val != DIFSECT) {
 #ifdef NEED_WARNING
-        fprintf(stderr,
-            "Warning: SecId=%d, "
-            "used for MSAT, but SAT[%d]=%d\n",
-            i, i, val);
-        fflush(stderr);
+        static bool flag = true;
+        if (flag) {
+          flag = false;
+          fprintf(stderr,
+              "WARNING: SecId=%d, "
+              "used for MSAT, but SAT[%d]=%d\n",
+              i, i, val);
+          fflush(stderr);
+        }
 #else
         return false;
 #endif
@@ -284,6 +336,8 @@ bool Storage::_init_sat() {
     for (unsigned long i = 0; i < _sat.size(); i += 4) {
       int id = get32(_sat, i);
       if (id < -4 || id >= (int)_sat.size() / 4) {
+        fprintf(stderr, "ERROR: (SAT) invalid index\n");
+        fflush(stderr);
         return false;
       }
       if (id == (int)ENDOFCHAIN || id >= 0) {
@@ -308,6 +362,8 @@ bool Storage::_init_sat() {
         // 从这个SecID开始应该可以连成一条链，不能有环
         for (uint32_t id = i; id != ENDOFCHAIN; id = sat[id]) {
           if (vis.count(id)) { // 出现环
+            fprintf(stderr, "ERROR: circle referece\n");
+            fflush(stderr);
             return false;
           }
           vis.insert(id);
@@ -318,13 +374,17 @@ bool Storage::_init_sat() {
     // 如果遍历过的位置的数量不等于所有可能是链节点的节点数量
     if (vis.size() != node_counter) {
 #ifdef NEED_WARNING
-      for (uint32_t i = 0; i < sat.size(); ++i) {
-        printf("sat[%d] = %d\n", i, sat[i]);
+      static bool flag = true;
+      if (flag) {
+        flag = false;
+        for (uint32_t i = 0; i < sat.size(); ++i) {
+          printf("sat[%d] = %d\n", i, sat[i]);
+        }
+        fprintf(stderr, "Warning: SAT may be invalid:"
+            "vis.size() = %u, node_counter = %d\n",
+            vis.size(), node_counter);
+        fflush(stderr);
       }
-      fprintf(stderr, "Warning: SAT may be invalid:"
-          "vis.size() = %u, node_counter = %d\n",
-          vis.size(), node_counter);
-      fflush(stderr);
 #else
       return false;
 #endif

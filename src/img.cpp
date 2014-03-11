@@ -6,7 +6,7 @@ static bool storeBlipBlock(uchar *block, char *img_name, uint size) {
   ushort recType = *(ushort *)(block + 2);
   // ushort recLen = *(uint *)(block + 4);
 
-  char str[32];
+  char str[128];
   uchar *start = block;
   if (recType == 0xF01A) { // EMF
     sprintf(str, "%s.emf", img_name);
@@ -41,7 +41,7 @@ static bool storeBlipBlock(uchar *block, char *img_name, uint size) {
   return true;
 }
 
-bool retrieve_image(const Storage &st) {
+bool retrieve_image(const Storage &st, const char *file_path) {
   // 取得WordDocument Stream (wds)
   uchar *wds = c_read_stream(&st, "WordDocument");
   if (wds == NULL) {
@@ -84,8 +84,8 @@ bool retrieve_image(const Storage &st) {
   uchar *rgfb = blipStore + 8;
   int counter = 0;
   while (rgfb < blipStore + *(uint *)(blipStore + 4)) {
-    char img_name[20];
-    sprintf(img_name, "img_%02d", ++counter);
+    char img_name[128];
+    sprintf(img_name, "%s/img_%02d", file_path, ++counter);
 
     ushort recType = *(ushort *)(rgfb + 2);
     uint recSize = *(uint *)(rgfb + 4);

@@ -193,6 +193,6 @@ typedef unsigned int uint;
 typedef unsigned long long ull;
 
 uchar *c_read_stream(const Storage *st, const char *name);
-bool retrieve_image(const Storage &st);
+bool retrieve_image(const Storage &st, const char *file_path);
 
 #endif
