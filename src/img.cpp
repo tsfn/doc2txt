@@ -1,6 +1,7 @@
 #include "ole.hpp"
 
-static bool storeBlipBlock(uchar *block, char *img_name, uint size) {
+// 提取一个OfficeArtBStoreContainerFileBlock中的图片
+bool storeBlipBlock(uchar *block, const char *img_name, uint size) {
   // uchar recVer = *(uchar *)(block) & 0xF;
   ushort recInstance = *(ushort *)(block) >> 4;
   ushort recType = *(ushort *)(block + 2);

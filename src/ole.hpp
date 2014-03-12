@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include <set>
+#include <map>
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -193,6 +194,7 @@ typedef unsigned int uint;
 typedef unsigned long long ull;
 
 uchar *c_read_stream(const Storage *st, const char *name);
+bool storeBlipBlock(uchar *block, const char *img_name, uint size);
 bool retrieve_image(const Storage &st, const char *file_path);
 
 #endif

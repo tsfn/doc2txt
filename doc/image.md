@@ -193,3 +193,53 @@ rgfb是个OfficeArtBStoreContainerFileBlock的数组，其中的每个元素指�
         fclose(file);
         return true;
     }
+
+#### 内嵌图片
+
+按Ctrl-V拷贝进Word文件的图片和选择从文件“插入”的图片存放的位置不一样。提取内嵌图片需要用到提取字符格式时得到的信息。
+
+如果某个字符的值是U+0001，且它的sprm=0x6A03，并且它没有(sprm=0x0806,operand=1)的属性，则这个字符的参数表示Data Stream中的PICFAndOfficeArtData结构的偏移，这个结构保存了图片。
+
+    PICFAndOfficeArtData {
+        picf: PICF (68 bytes) {
+            lcb (4 bytes);
+            cbHeader (2 bytes);
+            mfpf (8 bytes) {
+                mm: (2 bytes); // mm=0x0066时存在cchPicName和stPicName
+                xExt: (2 bytes);
+                yExt: (2 bytes);
+                swHMF: (2 bytes);
+            }
+            innerHeader: (14 bytes);
+            picmid: (38 bytes);
+            cProps: (2 bytes);
+        }
+        cchPicName (1 byte, optional); // stPicName的大小
+        stPicName (variable);
+        picture: OfficeArtInlineSpContainer (variable) {
+            shape: OfficeArtSpContainer (variable);
+            rgfb: OfficeArtBStoreContainerFileBlock[]; // doc/image.md
+        }
+    }
+
+大致过程如下：
+
+    uchar *data_stream = c_read_stream(&st, "Data");
+    if (data_stream == NULL) return false;
+
+    uchar *PICF = data_stream + operand;
+    uint lcbPICF = *(uint *)PICF;
+
+    ushort picf_mfpf_mm = *(ushort *)(PICF + 6);
+    uchar *picture = PICF + 68 + (picf_mfpf_mm == 0x0066 ? 1 + *(PICF + 68) : 0);
+    uchar *rgfb = picture + 8 + *(uint *)(picture + 4);
+
+    char img_name[128];
+    static int counter = 0;
+    while (rgfb < PICF + lcbPICF) {
+        sprintf(img_name, "inline_%02d", ++counter);
+        uint recSize = *(uint *)(rgfb + 4);
+        uchar cbName = *(rgfb + 41);
+        storeBlipBlock(rgfb + 44, img_name, recSize - cbName - 36);
+        rgfb += 8 + recSize;
+    }

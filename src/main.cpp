@@ -282,8 +282,6 @@ void list_directory_tree(const Storage &s, int DirID, int white_space) {
 }
 // }}}
 
-std::set<uint> sprms;
-
 // parse_format {{{
 std::set<ushort> parse_grpprl(uchar *grpprl, uint lcb) {
   static const int operand_size[8] = { 1, 1, 2, 4, 2, 2, -1, 3, };
@@ -383,7 +381,7 @@ bool parse_format(const Storage &st, FILE *file) {
 // }}}
 
 // read_grpprl {{{
-bool read_grpprl(uchar *grpprl, uint lcb) {
+bool read_grpprl(uchar *grpprl, uint lcb, std::set< std::pair<uint, uint> > &sprms) {
   static const int operand_size[8] = {
     1, // spra=0 Operand is a ToggleOperand (1 byte)
     1, // spra=1
@@ -396,8 +394,8 @@ bool read_grpprl(uchar *grpprl, uint lcb) {
     3, // spra=7
   };
 
-  printf("lcb = %d:\n", lcb);
   /*
+  printf("lcb = %d:\n", lcb);
   for (uint i = 0; i < lcb; ++i) {
     printf("%02X ", *(grpprl + i));
   }
@@ -433,7 +431,7 @@ bool read_grpprl(uchar *grpprl, uint lcb) {
       i += operand_size[spra];
     }
 
-    sprms.insert(sprm);
+    sprms.insert(std::make_pair(sprm, operand));
     printf("sprm = 0x%04X, sprm.sgc=%d, operand = 0x%04X\n", sprm, sgc, operand);
 
     /*
@@ -498,6 +496,8 @@ bool paragraph_formatting(const Storage &st)  {
    */
 
   std::vector<uint8_t> debug_info;
+
+  std::set< std::pair<uint, uint> > sprms;
 
   for (int i = 0; i < n; ++i) {
     /* 读取PlcBtePapx中的信息（其实PlcBtePapx在Table Stream中） */
@@ -589,7 +589,7 @@ bool paragraph_formatting(const Storage &st)  {
 
       printf("istd = 0x%04X\n", *GrpPrlAndIstd);
       // 根据GrpPrlAndIstd得到段落格式（Direct Paragraph Formatting）
-      if (read_grpprl(GrpPrlAndIstd + 2, lcbGrpPrlAndIstd - 2) || true) {
+      if (read_grpprl(GrpPrlAndIstd + 2, lcbGrpPrlAndIstd - 2, sprms) || true) {
         for (uint i = rgfc_start; i < rgfc_end; ++i) {
           debug_info.push_back(wds[i]);
         }
@@ -662,6 +662,8 @@ bool character_formatting(const Storage &st)  {
 
   std::vector<uint8_t> debug_info;
 
+  std::set< std::pair<uint, uint> > sprms;
+
   for (int i = 0; i < n; ++i) {
     /*
      * 从TableStream中读取关于PlcBteChpx的信息
@@ -720,10 +722,52 @@ bool character_formatting(const Storage &st)  {
 
       // ..
       uchar *Chpx = ChpxFkp + 2 * bOffset;
-      read_grpprl(Chpx + 1, cb);
+      read_grpprl(Chpx + 1, cb, sprms);
     }
   }
 
+  uchar *data_stream = c_read_stream(&st, "Data");
+  if (data_stream == NULL) {
+    return false;
+  }
+
+  std::set< std::pair<uint, uint> >::iterator iter;
+  for (iter = sprms.begin(); iter != sprms.end(); ++iter) {
+    uint sprm = iter->first;
+    uint operand = iter->second;
+    if (sprm == 0x6A03) {
+      // 当前字符表示Data Stream或OLE object storage中的图片或二进制文件
+      // 如果字符是U+0001:
+      // CPicLocation是DataStream中的一个位置。
+      // 如果sprmCFData(sprm=0x0806)存在并且值为1，则表示一个NilPICFAndBinData
+      // 否则这个值表示一个PICFAndOfficeArtData结构
+
+      uchar *PICF = data_stream + operand;
+      uint lcbPICF = *(uint *)PICF;
+
+      /*
+       * ref: doc/image.md
+       */
+
+      ushort picf_mfpf_mm = *(ushort *)(PICF + 6);
+      uchar *picture = PICF + 68 + (picf_mfpf_mm == 0x0066 ? 1 + *(PICF + 68) : 0);
+      uchar *rgfb = picture + 8 + *(uint *)(picture + 4);
+
+      char img_name[128];
+      static int counter = 0;
+      while (rgfb < PICF + lcbPICF) {
+        sprintf(img_name, "inline_%02d", ++counter);
+        // ushort recType = *(ushort *)(rgfb + 2);
+        uint recSize = *(uint *)(rgfb + 4);
+        uchar cbName = *(rgfb + 41);
+        storeBlipBlock(rgfb + 44, img_name, recSize - cbName - 36);
+        rgfb += 8 + recSize;
+      }
+
+    }
+  }
+
+  free(data_stream);
   free(wds);
   free(table_stream);
   return true;
@@ -866,7 +910,7 @@ bool retrieve_property_info(const Storage &st, FILE *file) {
   }
 
   uint fcSttbfAssoc = *(uint *)(wds + 154 + 64 * 4);
-  uint lcbSttbfAssoc = *(uint *)(wds + 154 + 65 * 4);
+  // uint lcbSttbfAssoc = *(uint *)(wds + 154 + 65 * 4);
 
   /*
    * STTB {
@@ -998,22 +1042,16 @@ bool parse_summary_information(const Storage &st, FILE *file) {
     ps += pre_size;
     pre_size = *(uint *)(ps);
     uint num_properties = *(uint *)(ps + 4);
-    printf("num_properties = %u\n", num_properties);
     for (uint i = 0; i < num_properties; ++i) {
-      uint pid = *(uint *)(ps + 8 + 8 * i);
+      // uint pid = *(uint *)(ps + 8 + 8 * i);
       uint offset = *(uint *)(ps + 8 + 8 * i + 4);
       ushort type = *(ushort *)(ps + offset);
-      ushort padding = *(ushort *)(ps + offset + 2);
-      printf("pid = %u, offset = %u, type = 0x%04X, padding = %d\n",
-          pid, offset, type, padding);
+      // ushort padding = *(ushort *)(ps + offset + 2);
       uchar *value = ps + offset + 4;
       if (type == 0x001E) {
         uint size = *(uint *)(value);
-        printf("size = %u\n", size);
         for (uint i = 0; i < size; ++i) {
           fputc(value[4 + i], out_file);
-          // printf("value[0x%02X] = 0x%02X\n", 4 + i, value[4 + i]);
-          // fputc(value[4 + i], file);
         }
       }
     }
@@ -1065,9 +1103,11 @@ int main(int argc, char *argv[]) {
     FILE *tmp_file = fopen(argv[2], "wb");
 
     // 输出property information
+    /*
     if (!retrieve_property_info(s, tmp_file)) {
       fprintf(stderr, "Can't retrieve propery information\n");
     }
+    */
 
     if (!parse_summary_information(s, tmp_file)) {
       fprintf(stderr, "Can't parse summary information\n");
@@ -1084,21 +1124,14 @@ int main(int argc, char *argv[]) {
   }
 
   // 取得图片
-  if (!retrieve_image(s, ".")) {
+  if (!retrieve_image(s, "/dev/shm")) {
     fprintf(stderr, "can't retrieve images!\n");
   }
 
   // Formatting： 文本的位置
-  // character_formatting(s);
-  // paragraph_formatting(s);
+  character_formatting(s);
+  paragraph_formatting(s);
   // parse_format(s, tmp_file);
-
-  /*
-  printf("sprms:\n");
-  for (auto p: sprms) {
-    printf("0x%04X\n", p);
-  }
-  */
 
   // Style： 文本的形状
   // style_property(s);
