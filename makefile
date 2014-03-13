@@ -1,14 +1,14 @@
-doc2txt: main.o ole.o img.o
-	g++ -std=c++11 -g -o bin/doc2txt -Wall main.o ole.o img.o
+VPATH=.:src
+cc=g++
+cflags=-g -Wall -fmax-errors=1 
+objects=main.o Storage.o parse_doc.o doc_text.o doc_image.o
 
-main.o: src/main.cpp src/ole.hpp
-	g++ -std=c++11 -g -Wall -o main.o -c src/main.cpp
+doc2txt: $(objects)
+	$(cc) $(objects) -o doc2txt $(cflags)
 
-ole.o: src/ole.cpp src/ole.hpp
-	g++ -std=c++11 -g -Wall -o ole.o -c src/ole.cpp
+$(objects): %.o: %.cpp
+	$(cc) $< -o $@ $(cflags) -c
 
-img.o: src/img.cpp src/ole.hpp
-	g++ -std=c++11 -g -Wall -o img.o -c src/img.cpp
-
+.PHONY: clean
 clean:
-	rm -f *.o
+	rm -f *.o doc2txt *.txt

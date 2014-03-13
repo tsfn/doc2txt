@@ -5,13 +5,6 @@
 
 `$ make`
 
-### Usage Example
-
-`$ ./bin/doc2txt a.doc a.html`
-
-will extract text from a.doc to a.html, with some format information.
-can only extract English text in format.
-
 ### Encoding
 
 the extracted text is encoded in UTF-16.
