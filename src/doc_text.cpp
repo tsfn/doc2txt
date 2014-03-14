@@ -13,8 +13,9 @@ static const uchar *get_piece_table(const Storage &storage) {
   }
 
   uint fcClx = *(const uint *)(wds + 0x01A2);
+  uint lcbClx = *(const uint *)(wds + 0x01A6);
   const uchar *clx = ts + fcClx;
-  for (uint pos = 0; clx + pos < wds + wds_size;) {
+  for (uint pos = 0; clx + pos < ts + ts_size && pos < lcbClx;) {
     uchar type = clx[pos];
     if (type == 2) {
       return clx + pos;
@@ -31,7 +32,7 @@ bool doc_text(const Storage &storage, FILE *text_file) {
   const uchar *wds;
   uint wds_size;
   if (!storage.stream("WordDocument", &wds, &wds_size)) {
-    return NULL;
+    return false;
   }
 
   const uchar *pt = get_piece_table(storage);
@@ -62,9 +63,14 @@ bool doc_text(const Storage &storage, FILE *text_file) {
     } else {
       uint fc = fcCompressed;
       uint cb = (end - start) * 2;
-      for (uint i = 0; i < cb; ++i) {
-        if (fc + i < wds_size) {
-          fputc(wds[fc + i], text_file);
+      for (uint i = 0; i < cb; i += 2) {
+        if (fc + i + 1 < wds_size) {
+          uchar low = wds[fc + i], high = wds[fc + i + 1];
+          ushort ch = ((ushort)high << 8) + low;
+          if (ch >= 0x000A) {
+            fputc(wds[fc + i], text_file);
+            fputc(wds[fc + i + 1], text_file);
+          }
         }
       }
     }

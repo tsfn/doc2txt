@@ -22,10 +22,10 @@ bool parse_doc(const char *doc_file_path, const char *text_file_path, const char
   if (text_file == NULL) {
     return false;
   }
-  if (!doc_text(storage, text_file)) {
-    return false;
-  }
+  doc_text(storage, text_file);
   fclose(text_file);
 
+  /* 提取图片 */
+  doc_image(storage, image_dir_path);
   return true;
 }
