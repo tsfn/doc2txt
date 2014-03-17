@@ -60,7 +60,7 @@ static bool retrieve_image(const Storage &st, const char *file_path) {
 
   uint fcDggInfo = *(const uint *)(wds + 154 + (194 - 94) * 4);
   uint lcbDggInfo = *(const uint *)(wds + 154 + (194 - 94) * 4 + 4);
-  if (lcbDggInfo == 0) {
+  if (lcbDggInfo == 0 || fcDggInfo >= ts_size) {
     return false;
   }
 
@@ -77,13 +77,16 @@ static bool retrieve_image(const Storage &st, const char *file_path) {
     ushort recType = *(const ushort *)(rgfb + 2);
     uint recSize = *(const uint *)(rgfb + 4);
     /*
-    printf("%04X\n", recType);
-    printf("%u\n", recSize);
+    printf("recType = %04X\n", recType);
+    printf("recSize = %u\n", recSize);
     */
     if (recType == 0xF007) {
       uint size = *(const uint *)(rgfb + 28);
       uint foDelay = *(const uint *)(rgfb + 36);
-      storeBlipBlock(wds + foDelay, img_name, size);
+      // printf("size = %u, foDelay = %u\n", size, foDelay);
+      if (foDelay < wds_size && foDelay + size <= wds_size) {
+        storeBlipBlock(wds + foDelay, img_name, size);
+      }
     } else if (0xF018 <= recType && recType <= 0xF117) {
       storeBlipBlock(rgfb, img_name, recSize);
     } else {
@@ -178,10 +181,10 @@ static bool inline_image(const Storage &st, const char *file_path) {
         const uchar *rgfb = picture + 8 + *(const uint *)(picture + 4);
 
         char *img_name = (char *)malloc(strlen(file_path) + 16);
-        while (rgfb < PICF + lcbPICF) {
+        while (PICF <= rgfb && rgfb < PICF + lcbPICF) {
           static int counter = 0;
           sprintf(img_name, "%s/i%05d", file_path, ++counter);
-          uint recSize = *(uint *)(rgfb + 4);
+          uint recSize = *(const uint *)(rgfb + 4);
           uchar cbName = *(rgfb + 41);
           storeBlipBlock(rgfb + 44, img_name, recSize - cbName - 36);
           rgfb += 8 + recSize;

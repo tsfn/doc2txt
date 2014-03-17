@@ -1,3 +1,8 @@
+/*
+ * 注意用storage.stream(name, &stream, &size)得到流的时候不要手动free(stream)
+ * Storage的析构函数~Storage()会自动free掉Storage中所有分配的内存
+ */
+
 #ifndef STORAGE_HPP
 #define STORAGE_HPP
 

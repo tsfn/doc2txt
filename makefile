@@ -1,7 +1,7 @@
 VPATH=.:src
 cc=g++
 cflags=-g -Wall -fmax-errors=1 
-objects=main.o Storage.o parse_doc.o doc_text.o doc_image.o
+objects=main.o Storage.o parse_doc.o doc_text.o doc_image.o doc_format.o doc_property.o
 
 doc2txt: $(objects)
 	$(cc) $(objects) -o doc2txt $(cflags)
