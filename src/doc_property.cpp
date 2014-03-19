@@ -77,15 +77,17 @@ bool parse_summary_information(const Storage &st) {
       const uchar *value = ps + offset + 4;
       if (type == 0x001E) {
         uint size = *(uint *)(value);
-        printf("size = %u\n", size);
+        // printf("size = %u\n", size);
+        printf("-> %s\n", (char *)(value + 4));
         for (uint i = 0; i < size; ++i) {
-          fputc(value[4 + i], out_file);
+          // fputc(value[4 + i], out_file);
           // printf("value[0x%02X] = 0x%02X\n", 4 + i, value[4 + i]);
           // fputc(value[4 + i], file);
         }
       }
     }
   }
+  fclose(out_file);
   return true;
 }
 

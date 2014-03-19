@@ -108,8 +108,8 @@ bool doc_text_file(const Storage &storage, FILE *text_file) {
     return false;
   }
 
-  fputc(0xFE, text_file);
   fputc(0xFF, text_file);
+  fputc(0xFE, text_file);
   uint lcb = *(const uint *)(pt + 1);
   uint n = (lcb - 4) / 12;
   const uchar *pcd = pt + 5;
