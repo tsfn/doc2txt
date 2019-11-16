@@ -32,6 +32,9 @@ static bool storeBlipBlock(const uchar *block, const char *img_name, uint size) 
   } else if (recType == 0xF029) { // TIFF
     sprintf(str, "%s.tiff", img_name);
     start += 8 + 16 + (recInstance == 0x6E5 ? 16 : 0) + 1;
+  } else {
+    fprintf(stderr, "unknown recType: %u\n", (uint)recType);
+    return false;
   }
 
   FILE *file = fopen(str, "wb");

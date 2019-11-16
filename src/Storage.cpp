@@ -157,7 +157,7 @@ bool Storage::init(FILE *doc_file) {
 
   memset(stream_name, 0, stream_num * sizeof(uchar *));
   memset(stream_table, 0, stream_num * sizeof(uchar *));
-  memset(stream_sizes, 0, stream_num * sizeof(uchar *));
+  memset(stream_sizes, 0, stream_num * sizeof(uint));
 
   for (uint i = 0; i < stream_num; ++i) {
     uchar *dir_entry = dir_stream + i * 128;
