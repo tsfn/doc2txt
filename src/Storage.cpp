@@ -172,7 +172,7 @@ bool Storage::init(FILE *doc_file) {
     }
     printf("-> sz=%u, id=%u\n", stream_sizes[i], id);
     */
-    if (stream_sizes[i] > _ulMiniSectorCutoff) {
+    if (stream_sizes[i] >= _ulMiniSectorCutoff) {
       if (!read_stream(id, 512, sat, sat_size,
             buf + 512, buf_size - 512, &stream_table[i], &stream_sizes[i])) {
         return false;
